@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ListoLista</title>
+    <style>
+      input {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      function saveToLocalStorage() {
+        const inputValues = Array.from(document.querySelectorAll("input")).map(
+          (input) => input.value
+        );
+        localStorage.setItem("inputs", JSON.stringify(inputValues));
+      }
+
+      function loadFromLocalStorage() {
+        const storedInputs = JSON.parse(localStorage.getItem("inputs")) || [];
+        storedInputs.forEach((value) => {
+          const input = document.createElement("input");
+          input.value = value;
+          input.onfocus = handleFocus;
+          input.onblur = handleBlur;
+          document.body.appendChild(input);
+        });
+        ensureTwoEmptyInputs();
+      }
+
+      function ensureTwoEmptyInputs() {
+        const emptyInputs = Array.from(
+          document.querySelectorAll("input")
+        ).filter((i) => i.value === "");
+        const inputsNeeded = 2 - emptyInputs.length;
+        for (let i = 0; i < inputsNeeded; i++) {
+          const newInput = document.createElement("input");
+          newInput.onfocus = handleFocus;
+          newInput.onblur = handleBlur;
+          document.body.appendChild(newInput);
+        }
+      }
+
+      let initialValue = "";
+
+      function handleFocus(event) {
+        initialValue = event.target.value;
+      }
+
+      function handleBlur(event) {
+        const input = event.target;
+        const currentValue = input.value;
+
+        if (initialValue === "" && currentValue !== "") {
+          document.body.removeChild(input);
+          const emptyInputs = Array.from(
+            document.querySelectorAll("input")
+          ).filter((i) => i.value === "");
+          document.body.insertBefore(input, emptyInputs[0]);
+        } else if (currentValue === "") {
+          document.body.removeChild(input);
+        }
+        ensureTwoEmptyInputs();
+        saveToLocalStorage();
+      }
+
+      loadFromLocalStorage();
+    </script>
+  </body>
+</html>
