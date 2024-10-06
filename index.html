@@ -5,42 +5,82 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ListoLista</title>
     <style>
-      input {
+      .input-wrapper {
+        position: relative;
         width: 100%;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding-right: 35px;
+        height: 30px;
+        line-height: 30px;
+      }
+
+      input[type="checkbox"] {
+        position: absolute;
+        right: 10px;
+        top: 0;
+        bottom: 0;
+        margin: auto;
+        transform: scale(1.5);
+        height: 20px;
+        width: 20px;
+        pointer-events: auto;
       }
     </style>
   </head>
   <body>
     <script>
       function saveToLocalStorage() {
-        const inputValues = Array.from(document.querySelectorAll("input")).map(
-          (input) => input.value
-        );
+        const inputValues = Array.from(
+          document.querySelectorAll("input[type='text']")
+        ).map((input) => input.value);
         localStorage.setItem("inputs", JSON.stringify(inputValues));
       }
 
       function loadFromLocalStorage() {
         const storedInputs = JSON.parse(localStorage.getItem("inputs")) || [];
         storedInputs.forEach((value) => {
+          const wrapper = document.createElement("div");
+          wrapper.classList.add("input-wrapper");
+
           const input = document.createElement("input");
+          input.type = "text";
           input.value = value;
           input.onfocus = handleFocus;
           input.onblur = handleBlur;
-          document.body.appendChild(input);
+          wrapper.appendChild(input);
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          wrapper.appendChild(checkbox);
+
+          document.body.appendChild(wrapper);
         });
         ensureTwoEmptyInputs();
       }
 
       function ensureTwoEmptyInputs() {
         const emptyInputs = Array.from(
-          document.querySelectorAll("input")
+          document.querySelectorAll("input[type='text']")
         ).filter((i) => i.value === "");
         const inputsNeeded = 2 - emptyInputs.length;
         for (let i = 0; i < inputsNeeded; i++) {
+          const wrapper = document.createElement("div");
+          wrapper.classList.add("input-wrapper");
+
           const newInput = document.createElement("input");
+          newInput.type = "text";
           newInput.onfocus = handleFocus;
           newInput.onblur = handleBlur;
-          document.body.appendChild(newInput);
+          wrapper.appendChild(newInput);
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          wrapper.appendChild(checkbox);
+
+          document.body.appendChild(wrapper);
         }
       }
 
@@ -55,13 +95,16 @@
         const currentValue = input.value;
 
         if (initialValue === "" && currentValue !== "") {
-          document.body.removeChild(input);
+          input.parentElement.remove();
           const emptyInputs = Array.from(
-            document.querySelectorAll("input")
+            document.querySelectorAll("input[type='text']")
           ).filter((i) => i.value === "");
-          document.body.insertBefore(input, emptyInputs[0]);
+          document.body.insertBefore(
+            input.parentElement,
+            emptyInputs[0].parentElement
+          );
         } else if (currentValue === "") {
-          document.body.removeChild(input);
+          input.parentElement.remove();
         }
         ensureTwoEmptyInputs();
         saveToLocalStorage();
