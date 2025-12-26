@@ -2,101 +2,74 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- 
-        VIEWPORT CONFIGURATION 
-        - maximum-scale=1.0, user-scalable=no: Prevents auto-zoom on inputs (iOS quirk) 
-          and maintains "Native App" feel.
-    -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Goal Zero</title>
+    <title>ListoLista</title>
     <style>
-        /* * [DESIGN SYSTEM: PRAGMATIC UTILITY]
-         * Philosophy: Minimal styling required for maximum usability.
-         * Stack: CSS Variables for theming, Flexbox for layout.
-         */
+        /* [DESIGN SYSTEM: PRAGMATIC UTILITY] */
         :root {
-            /* DIMENSIONS */
-            --h-header: 40px; /* Fixed height for sticky header */
-            --h-item: 50px;   /* Minimum tap target size (Mobile Ergonomics) */
-            
-            /* PALETTE */
+            --h-header: 40px;
+            --h-item: 55px;
             --color-text: #000;
             --color-bg: #fff;
-            --color-dim: #ccc; /* Used for borders and separators */
-            
-            /* TYPOGRAPHY */
-            /* System stack ensures 0kb font loading time */
+            --color-dim: #eee;
             --font-stack: system-ui, -apple-system, sans-serif;
         }
 
-        /* RESET: Ensure consistent box model and remove mobile tap highlights */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        /* * LAYOUT: APP SHELL
-         * overflow: hidden on body prevents the "rubber band" effect on mobile.
-         * We handle scrolling internally within #viewport.
-         */
         body, html {
             margin: 0; padding: 0;
-            height: 100%;
-            width: 100%;
+            height: 100%; width: 100%;
             font-family: var(--font-stack);
             background: var(--color-bg);
             color: var(--color-text);
             overflow: hidden; 
         }
 
-        /* --- COMPONENT: FIXED HEADER --- */
-        #header {
+        /* --- FIXED HEADER --- */
+        header {
             height: var(--h-header);
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 0 1rem;
-            border-bottom: 1px solid var(--color-text);
-            position: fixed; /* Sticks to top */
+            border-bottom: 2px solid var(--color-text);
+            position: fixed;
             top: 0; left: 0; right: 0;
             background: var(--color-bg);
-            z-index: 10; /* Layers above the list content */
+            z-index: 10;
         }
 
-        #list-title { font-weight: bold; font-size: 0.9rem; text-transform: uppercase; }
-        #menu-btn { cursor: pointer; font-size: 1.2rem; }
+        #title { font-weight: bold; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+        #menu { cursor: pointer; font-size: 1.2rem; }
 
-        /* --- COMPONENT: SCROLLABLE VIEWPORT --- */
-        /* This is the main interaction area. It sits below the header and handles its own scroll. */
-        #viewport {
+        /* --- SCROLLABLE VIEWPORT --- */
+        main {
             position: absolute;
             top: var(--h-header);
             bottom: 0;
             left: 0; right: 0;
-            overflow-y: auto; /* Enable vertical scrolling */
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
         }
 
         /* --- COMPONENT: INPUT STREAM --- */
-        /* The "Waterfall" entry points. Fixed at the top of the viewport flow. */
-        .input-slot {
-            height: var(--h-item);
+        .slot {
+            min-height: var(--h-item);
             border-bottom: 1px solid var(--color-dim);
             display: flex;
             align-items: center;
             padding: 0 1rem;
         }
 
-        .input-slot input {
-            width: 100%;
-            height: 100%;
-            border: none;
-            font-size: 1rem;
-            font-family: inherit;
-            outline: none; /* Removes browser default focus ring (Pragmatic Brutalism) */
+        .slot input {
+            width: 100%; height: 100%; border: none;
+            font-size: 1.1rem; font-family: inherit; outline: none; background: transparent;
         }
 
         /* --- COMPONENT: LIST ITEMS --- */
-        /* The interactive data blocks. */
-        .item-block {
+        .row {
             min-height: var(--h-item);
             border-bottom: 1px solid var(--color-dim);
             display: flex;
@@ -104,243 +77,203 @@
             justify-content: space-between;
             padding: 0 1rem;
             cursor: pointer;
-            user-select: none; /* Prevents text highlighting during rapid toggling */
+            user-select: none;
+            transition: background 0.1s;
         }
 
-        .item-text {
-            flex-grow: 1;
-            font-size: 1rem;
-            padding: 10px 0;
-        }
-
-        /* ACTION: DELETE BUTTON */
-        /* A discrete hit target on the right side */
-        .item-delete {
-            padding: 10px;
+        .txt { flex-grow: 1; font-size: 1.1rem; padding: 12px 0; }
+        
+        .del {
+            padding: 10px 0 10px 20px;
             color: var(--color-text);
             font-weight: bold;
-            cursor: pointer;
-            margin-left: 10px;
+            font-size: 1.4rem;
         }
 
         /* STATE: COMPLETED */
-        /* Visual indication of "Death" state */
-        .is-completed {
-            background-color: #f9f9f9;
+        .done { background-color: #fcfcfc; color: #aaa; }
+        .done .txt { text-decoration: line-through; }
+
+        /* --- COMPONENT: MENU MODAL (New) --- */
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 50;
+            display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(2px);
         }
-        .is-completed .item-text {
-            text-decoration: line-through;
-            color: #888;
+        
+        .hidden { display: none !important; }
+
+        #modal-box {
+            background: var(--color-bg);
+            width: 80%;
+            max-width: 300px;
+            border: 2px solid var(--color-text);
+            padding: 1.5rem;
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
         }
+
+        .menu-opt {
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--color-dim);
+            font-size: 1rem;
+            color: #555;
+            cursor: pointer;
+        }
+        .menu-opt:last-child { border-bottom: none; }
+        .menu-opt:hover { color: #000; }
         
     </style>
 </head>
 <body>
 
-    <!-- UI: HEADER -->
-    <div id="header">
-        <div id="list-title">My Main List</div>
-        <div id="menu-btn">☰</div>
-    </div>
+    <header>
+        <div id="title">Mi Lista</div>
+        <div id="menu">☰</div>
+    </header>
 
-    <!-- UI: MAIN CONTAINER -->
-    <div id="viewport">
-        <!-- 
-            INPUT STREAM: 
-            Two static inputs ensure the user always has a "Next" slot 
-            ready without the UI jumping/shifting under their finger.
-        -->
-        <div class="input-slot"><input id="in-1" placeholder="" autocomplete="off"></div>
-        <div class="input-slot"><input id="in-2" placeholder="" autocomplete="off"></div>
+    <main id="viewport">
+        <!-- Input Stream -->
+        <div class="slot"><input id="i1" placeholder="Type here..." autocomplete="off"></div>
+        <div class="slot"><input id="i2" placeholder="..." autocomplete="off"></div>
         
-        <!-- DYNAMIC LIST CONTAINERS -->
-        <div id="list-living"></div> <!-- Pending Items -->
-        <div id="list-dead"></div>   <!-- Completed Items -->
+        <div id="pending-box"></div>
+        <div id="completed-box"></div>
+    </main>
+
+    <!-- MENU OVERLAY -->
+    <div id="modal-overlay" class="hidden">
+        <div id="modal-box">
+            <h3 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">Options</h3>
+            <div class="menu-opt">Export List (Mock)</div>
+            <div class="menu-opt">Theme: Dark (Mock)</div>
+            <div class="menu-opt">Clear Completed (Mock)</div>
+            <div class="menu-opt" style="font-weight:bold; margin-top:10px;" id="close-btn">Close</div>
+        </div>
     </div>
 
     <script>
-        /**
-         * [NAMESPACE: App]
-         * Encapsulates the entire application logic to prevent global scope pollution.
-         * Follows a strict Init -> Bind -> Render cycle.
-         */
         const App = {
-            // --- STATE MANAGEMENT ---
-            // The Single Source of Truth. All UI is a reflection of this object.
-            state: {
-                /**
-                 * Item Schema:
-                 * {
-                 * id: number (timestamp),    // Unique Identifier
-                 * text: string,              // The content
-                 * done: boolean,             // State (Living vs Dead)
-                 * timestamp: number,         // Creation Time (for FIFO sorting)
-                 * deathTime: number | null   // Completion Time (for LIFO sorting)
-                 * }
-                 */
-                items: [] 
-            },
+            state: { items: [] },
+            config: { storageKey: 'listolista_v1' },
 
-            /**
-             * [LIFECYCLE: INIT]
-             * Bootstraps the application.
-             */
             init() {
                 this.cacheDOM();
-                this.bindEvents();
+                this.load(); // Load from LocalStorage
+                this.bind();
                 this.render();
-                // UX Rule: "Velocity of Thought" -> Immediate focus on load.
-                this.dom.in1.focus();
+                this.dom.i1.focus();
             },
 
-            /**
-             * [HELPER: CACHE DOM]
-             * Caches DOM references to avoid expensive querySelector calls during runtime.
-             */
             cacheDOM() {
                 this.dom = {
-                    in1: document.getElementById('in-1'),
-                    in2: document.getElementById('in-2'),
-                    live: document.getElementById('list-living'),
-                    dead: document.getElementById('list-dead')
+                    i1: document.getElementById('i1'),
+                    i2: document.getElementById('i2'),
+                    pBox: document.getElementById('pending-box'),
+                    cBox: document.getElementById('completed-box'),
+                    menuBtn: document.getElementById('menu'),
+                    modal: document.getElementById('modal-overlay'),
+                    closeBtn: document.getElementById('close-btn')
                 };
             },
 
-            /**
-             * [HELPER: BIND EVENTS]
-             * Sets up event listeners for the Input Stream.
-             */
-            bindEvents() {
-                // Attach logic to both inputs in the stream
-                [this.dom.in1, this.dom.in2].forEach((input, idx) => {
-                    // Trigger 1: Enter Key -> Commit
-                    input.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') this.commitInput(input);
-                    });
-                    
-                    // Trigger 2: Blur (Focus Loss) -> Commit
-                    // Note: setTimeout prevents race conditions if the user clicks a delete button immediately.
-                    input.addEventListener('blur', () => {
-                        setTimeout(() => this.commitInput(input), 100);
-                    });
+            bind() {
+                // Input Stream
+                [this.dom.i1, this.dom.i2].forEach(input => {
+                    input.onkeydown = e => { if (e.key === 'Enter') this.add(input); };
+                    input.onblur = () => { setTimeout(() => this.add(input), 150); };
                 });
+
+                // Menu Interactions
+                this.dom.menuBtn.onclick = () => this.dom.modal.classList.remove('hidden');
+                this.dom.closeBtn.onclick = () => this.dom.modal.classList.add('hidden');
+                // Close on backdrop click
+                this.dom.modal.onclick = (e) => {
+                    if (e.target === this.dom.modal) this.dom.modal.classList.add('hidden');
+                };
             },
 
-            /**
-             * [ACTION: COMMIT INPUT]
-             * Transforms raw input string into a structured Item object.
-             * @param {HTMLElement} inputEl - The input element triggering the commit.
-             */
-            commitInput(inputEl) {
-                const text = inputEl.value.trim();
-                // Validation: Ignore empty strings
-                if (!text) return;
+            // --- PERSISTENCE LAYER ---
+            load() {
+                const data = localStorage.getItem(this.config.storageKey);
+                if (data) {
+                    try {
+                        this.state.items = JSON.parse(data);
+                    } catch (e) { console.error('Data corruption', e); }
+                }
+            },
 
-                const newItem = {
+            save() {
+                localStorage.setItem(this.config.storageKey, JSON.stringify(this.state.items));
+            },
+
+            // --- LOGIC ---
+            add(el) {
+                const val = el.value.trim();
+                if (!val) return;
+
+                this.state.items.push({
                     id: Date.now(),
-                    text: text,
+                    txt: val,
                     done: false,
-                    timestamp: Date.now(),
-                    deathTime: null
-                };
+                    ts: Date.now(),
+                    dt: null
+                });
 
-                // Update State
-                this.state.items.push(newItem);
-
-                // UX: Reset Input and Maintain Focus for rapid-fire entry
-                inputEl.value = '';
-                inputEl.focus();
-
-                // Update UI
+                el.value = '';
+                el.focus();
+                this.save(); // Persist
                 this.render();
             },
 
-            /**
-             * [ACTION: TOGGLE ITEM]
-             * Flips the 'done' state and updates 'deathTime' for sorting.
-             * @param {number} id - The ID of the item to toggle.
-             */
-            toggleItem(id) {
+            toggle(id) {
                 const item = this.state.items.find(i => i.id === id);
                 if (item) {
                     item.done = !item.done;
-                    // Record death time for LIFO sorting in the Graveyard
-                    item.deathTime = item.done ? Date.now() : null;
+                    item.dt = item.done ? Date.now() : null;
+                    this.save(); // Persist
                     this.render();
                 }
             },
 
-            /**
-             * [ACTION: DELETE ITEM]
-             * Removes the item from State entirely (The Void).
-             * @param {number} id - The ID of the item to delete.
-             * @param {Event} e - The click event (needed for stopPropagation).
-             */
-            deleteItem(id, e) {
-                // Critical: Stop the click from bubbling to the parent row (which would toggle state)
+            remove(id, e) {
                 e.stopPropagation();
-                
-                // Filter out the specific ID
                 this.state.items = this.state.items.filter(i => i.id !== id);
+                this.save(); // Persist
                 this.render();
             },
 
-            /**
-             * [RENDER ENGINE]
-             * Pure function: State -> UI.
-             * Clears the DOM and rebuilds based on current State.
-             */
             render() {
-                // 1. Clear current views
-                this.dom.live.innerHTML = '';
-                this.dom.dead.innerHTML = '';
+                this.dom.pBox.innerHTML = '';
+                this.dom.cBox.innerHTML = '';
 
-                // 2. Partition & Sort State
-                // Living (Pending): FIFO (Oldest First) -> Encourages clearing backlog
-                const pending = this.state.items
-                    .filter(i => !i.done)
-                    .sort((a,b) => a.timestamp - b.timestamp);
-                
-                // Dead (Completed): LIFO (Newest First) -> Shows recent accomplishments
-                const completed = this.state.items
-                    .filter(i => i.done)
-                    .sort((a,b) => b.deathTime - a.deathTime);
+                const pending = this.state.items.filter(i => !i.done).sort((a,b) => a.ts - b.ts);
+                const completed = this.state.items.filter(i => i.done).sort((a,b) => b.dt - a.dt);
 
-                // 3. Inject HTML
-                pending.forEach(item => this.dom.live.appendChild(this.createItemBlock(item)));
-                completed.forEach(item => this.dom.dead.appendChild(this.createItemBlock(item)));
+                pending.forEach(i => this.dom.pBox.appendChild(this.row(i)));
+                completed.forEach(i => this.dom.cBox.appendChild(this.row(i)));
             },
 
-            /**
-             * [COMPONENT FACTORY: ITEM BLOCK]
-             * Creates the DOM structure for a single list item.
-             * @param {Object} item - The item object from state.
-             * @returns {HTMLElement} - The constructed div.
-             */
-            createItemBlock(item) {
+            row(item) {
                 const div = document.createElement('div');
-                // Conditional Class for styling
-                div.className = `item-block ${item.done ? 'is-completed' : ''}`;
-                // Bind Click -> Toggle
-                div.onclick = () => this.toggleItem(item.id);
+                div.className = `row ${item.done ? 'done' : ''}`;
+                div.onclick = () => this.toggle(item.id);
 
-                const text = document.createElement('div');
-                text.className = 'item-text';
-                text.textContent = item.text;
+                const txt = document.createElement('div');
+                txt.className = 'txt';
+                txt.textContent = item.txt;
 
                 const del = document.createElement('div');
-                del.className = 'item-delete';
-                del.textContent = '×'; // Unicode Multiplication X
-                // Bind Click -> Delete
-                del.onclick = (e) => this.deleteItem(item.id, e);
+                del.className = 'del';
+                del.innerHTML = '&times;';
+                del.onclick = (e) => this.remove(item.id, e);
 
-                div.appendChild(text);
-                div.appendChild(del);
+                div.append(txt, del);
                 return div;
             }
         };
 
-        // Ignite Application
         App.init();
     </script>
 </body>
