@@ -7,7 +7,7 @@
     <style>
         /* [DESIGN SYSTEM: PRAGMATIC UTILITY] */
         :root {
-            --h-header: 40px;
+            --h-header: 50px; /* Slightly taller for icons */
             --h-item: 55px;
             --color-text: #000;
             --color-bg: #fff;
@@ -40,8 +40,40 @@
             z-index: 10;
         }
 
-        #title { font-weight: bold; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
-        #menu { cursor: pointer; font-size: 1.2rem; }
+        /* EDITABLE TITLE */
+        #title-container {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+        #title { 
+            font-weight: bold; 
+            font-size: 0.9rem; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            padding: 5px;
+            border-bottom: 1px dashed transparent;
+            display: inline-block;
+        }
+        #title:focus {
+            outline: none;
+            border-bottom: 1px dashed var(--color-text);
+            background: #f9f9f9;
+        }
+
+        /* HEADER ACTIONS */
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 15px; /* Spacing between icons */
+        }
+        .icon-btn {
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            user-select: none;
+        }
+        .icon-btn:hover { opacity: 0.7; }
+        .icon-btn:active { transform: scale(0.95); }
 
         /* --- SCROLLABLE VIEWPORT --- */
         main {
@@ -94,7 +126,7 @@
         .done { background-color: #fcfcfc; color: #aaa; }
         .done .txt { text-decoration: line-through; }
 
-        /* --- COMPONENT: MENU MODAL (New) --- */
+        /* --- COMPONENT: MENU MODAL --- */
         #modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.4);
@@ -124,19 +156,37 @@
         .menu-opt:last-child { border-bottom: none; }
         .menu-opt:hover { color: #000; }
         
+        /* HIDDEN FILE INPUT */
+        #file-input { display: none; }
+
+        /* TOAST NOTIFICATION */
+        #toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #000; color: #fff; padding: 10px 20px; border-radius: 4px;
+            font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        #toast.show { opacity: 1; }
     </style>
 </head>
 <body>
 
     <header>
-        <div id="title">Mi Lista</div>
-        <div id="menu">☰</div>
+        <div id="title-container">
+            <div id="title" contenteditable="true" spellcheck="false">MI LISTA</div>
+        </div>
+        <div class="actions">
+            <!-- Icons: Save, Open, Share, Menu -->
+            <div class="icon-btn" id="btn-save" title="Save to File">💾</div>
+            <div class="icon-btn" id="btn-open" title="Open File">📂</div>
+            <div class="icon-btn" id="btn-share" title="Copy to Clipboard">🔗</div>
+            <div class="icon-btn" id="btn-menu" title="Menu">☰</div>
+        </div>
     </header>
 
     <main id="viewport">
         <!-- Input Stream -->
-        <div class="slot"><input id="i1" placeholder="Type here..." autocomplete="off"></div>
-        <div class="slot"><input id="i2" placeholder="..." autocomplete="off"></div>
+        <div class="slot"><input id="i1" placeholder="Escribe aquí..." autocomplete="off"></div>
+        <div class="slot"><input id="i2" placeholder="Escribe aquí..." autocomplete="off"></div>
         
         <div id="pending-box"></div>
         <div id="completed-box"></div>
@@ -146,16 +196,22 @@
     <div id="modal-overlay" class="hidden">
         <div id="modal-box">
             <h3 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">Options</h3>
-            <div class="menu-opt">Export List (Mock)</div>
-            <div class="menu-opt">Theme: Dark (Mock)</div>
-            <div class="menu-opt">Clear Completed (Mock)</div>
+            <div class="menu-opt" id="opt-clear">Clear Completed</div>
+            <div class="menu-opt" id="opt-wipe">Wipe All Data</div>
             <div class="menu-opt" style="font-weight:bold; margin-top:10px;" id="close-btn">Close</div>
         </div>
     </div>
 
+    <!-- Hidden Elements -->
+    <input type="file" id="file-input" accept=".json">
+    <div id="toast">Copied to clipboard!</div>
+
     <script>
         const App = {
-            state: { items: [] },
+            state: { 
+                title: "MI LISTA",
+                items: [] 
+            },
             config: { storageKey: 'listolista_v1' },
 
             init() {
@@ -168,29 +224,69 @@
 
             cacheDOM() {
                 this.dom = {
+                    title: document.getElementById('title'),
                     i1: document.getElementById('i1'),
                     i2: document.getElementById('i2'),
                     pBox: document.getElementById('pending-box'),
                     cBox: document.getElementById('completed-box'),
-                    menuBtn: document.getElementById('menu'),
+                    // Actions
+                    btnSave: document.getElementById('btn-save'),
+                    btnOpen: document.getElementById('btn-open'),
+                    btnShare: document.getElementById('btn-share'),
+                    btnMenu: document.getElementById('btn-menu'),
+                    fileInput: document.getElementById('file-input'),
+                    // Modal
                     modal: document.getElementById('modal-overlay'),
-                    closeBtn: document.getElementById('close-btn')
+                    closeBtn: document.getElementById('close-btn'),
+                    optClear: document.getElementById('opt-clear'),
+                    optWipe: document.getElementById('opt-wipe'),
+                    toast: document.getElementById('toast')
                 };
             },
 
             bind() {
-                // Input Stream
+                // 1. Input Stream
                 [this.dom.i1, this.dom.i2].forEach(input => {
                     input.onkeydown = e => { if (e.key === 'Enter') this.add(input); };
                     input.onblur = () => { setTimeout(() => this.add(input), 150); };
                 });
 
-                // Menu Interactions
-                this.dom.menuBtn.onclick = () => this.dom.modal.classList.remove('hidden');
+                // 2. Title Editing
+                this.dom.title.oninput = () => {
+                    this.state.title = this.dom.title.innerText;
+                    this.save();
+                };
+                // Prevent Enter key in title from creating new lines
+                this.dom.title.onkeydown = (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); this.dom.title.blur(); }
+                };
+
+                // 3. Header Actions
+                this.dom.btnSave.onclick = () => this.actionExport();
+                this.dom.btnOpen.onclick = () => this.dom.fileInput.click();
+                this.dom.btnShare.onclick = () => this.actionShare();
+                
+                // File Input Change (For Open)
+                this.dom.fileInput.onchange = (e) => this.actionImport(e);
+
+                // 4. Menu & Modal
+                this.dom.btnMenu.onclick = () => this.dom.modal.classList.remove('hidden');
                 this.dom.closeBtn.onclick = () => this.dom.modal.classList.add('hidden');
-                // Close on backdrop click
                 this.dom.modal.onclick = (e) => {
                     if (e.target === this.dom.modal) this.dom.modal.classList.add('hidden');
+                };
+                
+                // Menu Options
+                this.dom.optClear.onclick = () => {
+                    this.state.items = this.state.items.filter(i => !i.done);
+                    this.save(); this.render(); this.dom.modal.classList.add('hidden');
+                };
+                this.dom.optWipe.onclick = () => {
+                    if(confirm("Delete everything?")) {
+                        this.state.items = []; 
+                        this.save(); this.render(); 
+                        this.dom.modal.classList.add('hidden');
+                    }
                 };
             },
 
@@ -199,16 +295,25 @@
                 const data = localStorage.getItem(this.config.storageKey);
                 if (data) {
                     try {
-                        this.state.items = JSON.parse(data);
+                        const parsed = JSON.parse(data);
+                        // Backwards compatibility check (if we added title later)
+                        if (parsed.items) {
+                            this.state = parsed;
+                        } else {
+                            // Legacy format was just array
+                            this.state.items = parsed;
+                        }
                     } catch (e) { console.error('Data corruption', e); }
                 }
+                // Update Title in DOM
+                this.dom.title.innerText = this.state.title || "MI LISTA";
             },
 
             save() {
-                localStorage.setItem(this.config.storageKey, JSON.stringify(this.state.items));
+                localStorage.setItem(this.config.storageKey, JSON.stringify(this.state));
             },
 
-            // --- LOGIC ---
+            // --- CORE LOGIC ---
             add(el) {
                 const val = el.value.trim();
                 if (!val) return;
@@ -223,7 +328,7 @@
 
                 el.value = '';
                 el.focus();
-                this.save(); // Persist
+                this.save();
                 this.render();
             },
 
@@ -232,7 +337,7 @@
                 if (item) {
                     item.done = !item.done;
                     item.dt = item.done ? Date.now() : null;
-                    this.save(); // Persist
+                    this.save();
                     this.render();
                 }
             },
@@ -240,8 +345,91 @@
             remove(id, e) {
                 e.stopPropagation();
                 this.state.items = this.state.items.filter(i => i.id !== id);
-                this.save(); // Persist
+                this.save();
                 this.render();
+            },
+
+            // --- NEW ACTIONS (Save/Open/Share) ---
+            
+            actionExport() {
+                // Create a JSON blob
+                const dataStr = JSON.stringify(this.state, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                
+                // Create temp link to trigger download
+                const a = document.createElement('a');
+                a.href = url;
+                const safeTitle = this.state.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                a.download = `${safeTitle}_backup.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                this.showToast("List saved to Downloads");
+            },
+
+            actionImport(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        // Validation: Check if it looks like our schema
+                        if (parsed.items && Array.isArray(parsed.items)) {
+                            this.state = parsed;
+                            this.save();
+                            this.render();
+                            this.dom.title.innerText = this.state.title;
+                            this.showToast("List loaded successfully");
+                        } else {
+                            alert("Invalid file format");
+                        }
+                    } catch (err) {
+                        alert("Error reading file");
+                    }
+                };
+                reader.readAsText(file);
+                // Reset input so same file can be selected again
+                e.target.value = '';
+            },
+
+            actionShare() {
+                // Generate a pretty text version
+                let text = `${this.state.title}\n\n`;
+                
+                const pending = this.state.items.filter(i => !i.done);
+                const completed = this.state.items.filter(i => i.done);
+
+                if (pending.length > 0) {
+                    text += "PENDING:\n";
+                    pending.forEach(i => text += `[ ] ${i.txt}\n`);
+                }
+                
+                if (completed.length > 0) {
+                    text += "\nCOMPLETED:\n";
+                    completed.forEach(i => text += `[x] ${i.txt}\n`);
+                }
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(text).then(() => {
+                    this.showToast("List copied to clipboard!");
+                }).catch(() => {
+                    // Fallback for older browsers / iframes
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    this.showToast("List copied to clipboard!");
+                });
+            },
+
+            showToast(msg) {
+                this.dom.toast.textContent = msg;
+                this.dom.toast.classList.add('show');
+                setTimeout(() => this.dom.toast.classList.remove('show'), 2000);
             },
 
             render() {
