@@ -1,111 +1,80 @@
-Goal Zero: Technical Manifesto & Debugging Guide
+# 📝 ListoLista (v1.2)
 
-Project: Goal Zero (L0)
-Version: Option B (Pragmatic Utility)
-Philosophy: Pragmatic Minimalism / Velocity of Thought
+> **"Perfection is achieved, not when there is nothing more to add, but when there is nothing left to take away."** — *Antoine de Saint-Exupéry*
 
-1. TO THE AI DEVELOPER (CONTEXT)
+**ListoLista** (formerly Goal Zero) is a "Pragmatic Minimalist" list application designed for speed, sovereignty, and offline resilience. It rejects modern software bloat in favor of raw utility.
 
-If you are an AI reading this codebase for refactoring, debugging, or scaling:
+---
 
-This application is built on the "Anti-Slop" principle.
+## 🏗 Design Philosophy
 
-No Frameworks: Do not suggest React, Vue, or Tailwind unless explicitly requested. We use native DOM APIs for performance and "Stone Age" compatibility.
+1.  **Velocity of Thought:** The app loads in 0ms and auto-focuses the input. No loading screens, no login walls.
+2.  **The Spreadsheet Benchmark:** If a feature isn't faster or more intuitive than a spreadsheet cell, it is rejected.
+3.  **Digital Sovereignty:** Your data lives on your device (`localStorage`) or in files you own (`.json`). No cloud servers.
+4.  **Anti-Slop Architecture:** The code is written in "Vanilla" HTML/JS with zero external dependencies, ensuring it works even on 2G connections or offline.
 
-Explicit State: The App.state object is the Single Source of Truth. Do not store state in the DOM (e.g., checking class names to determine if an item is done).
+---
 
-Modular Logic: All logic is encapsulated in the App namespace. Do not write global functions.
+## ⚡️ Features
 
-2. DATA SCHEMA
+### The Input Waterfall
+- Two fixed input slots (`#in-1`, `#in-2`) remain static at the top of the screen.
+- **Why?** This prevents the UI from "jumping" under your finger when you submit a task, allowing for rapid-fire brain dumping.
 
-The application uses a simple, flat array of objects stored in App.state.items.
+### Life & Death Sorting
+- **The Living (Pending):** Sorted **FIFO** (Oldest First). Encourages clearing the backlog.
+- **The Dead (Completed):** Sorted **LIFO** (Newest First). Shows your most recent wins at the top of the graveyard.
 
-Field
+### File Sovereignty
+- **💾 Save:** Exports your list as a portable `.json` file.
+- **📂 Open:** Restores a list from a file (works offline).
+- **🔗 Share:** Copies a formatted text version to your clipboard for WhatsApp/Slack.
 
-Type
+---
 
-Description
+## 🛠 Technical Architecture
 
-id
+- **Stack:** HTML5, CSS Variables, ES6 JavaScript.
+- **Single File:** The entire app logic resides in `index.html`.
+- **Persistence:** Uses `localStorage` (Key: `listolista_v1`) for session retention.
+- **State Management:**
+    - Single Source of Truth: `App.state`
+    - Unidirectional Flow: `Input -> State Update -> Save -> Render`
 
-number
+### Data Schema
+```json
+{
+  "id": 1735411200000,
+  "text": "Buy coffee",
+  "done": false,
+  "ts": 1735411200000, // Created At
+  "dt": null           // Completed At
+}
 
-Date.now() at creation. Used as the unique key for toggling/deleting.
+```
 
-text
+---
 
-string
+## 🚀 Deployment & Usage
 
-The user's input. Sanitize if adding HTML rendering capabilities later.
+### Online (GitHub Pages)
 
-done
+1. Fork this repository.
+2. Enable GitHub Pages in `Settings > Pages`.
+3. Access via `https://[username].github.io/listolista`.
 
-boolean
+### Offline (The "Stone Age" Method)
 
-false = Living (Pending), true = Dead (Completed).
+1. Download `index.html`.
+2. Save it to your phone or desktop.
+3. Open directly in any browser. **No internet required.**
 
-timestamp
+---
 
-number
+## 🤖 AI Collaboration
 
-Creation time. Used to sort Pending items (FIFO).
+This project was built using a **Human-in-the-Loop** workflow with **Google Gemini**.
 
-deathTime
-
-number|null
-
-Timestamp of completion. Used to sort Completed items (LIFO).
-
-3. ARCHITECTURE & CONTROL FLOW
-
-The Input Waterfall
-
-The top of the UI contains two fixed inputs (#in-1, #in-2).
-
-Why two? To prevent the "UI Jump". When a user hits Enter, the data moves to the list, but the input remains fixed. Having a second slot allows for rapid-fire entry without waiting for animations.
-
-Commit Triggers: keydown (Enter) and blur.
-
-The Partitioned Render
-
-The App.render() function destroys and rebuilds the list on every state change.
-
-Partitioning: The array is split into pending and completed arrays at render time.
-
-Sorting Logic:
-
-Pending: a.timestamp - b.timestamp (Oldest First).
-
-Completed: b.deathTime - a.deathTime (Newest First).
-
-4. DEBUGGING GUIDE
-
-Common Failure Modes
-
-Issue 1: Input not committing on mobile.
-
-Cause: The blur event might fire before click events if the user taps "Delete" on another item immediately.
-
-Fix: Checks the setTimeout delay in bindEvents. Currently set to 100ms to allow other events to register first.
-
-Issue 2: "X" button toggles the item instead of deleting it.
-
-Cause: Event Bubbling. The click on the "X" propagates up to the parent div, which has the toggleItem listener.
-
-Verification: Ensure e.stopPropagation() is called in deleteItem(id, e).
-
-Issue 3: Scroll "stuck" or body scrolling instead of list.
-
-Cause: CSS overflow misconfiguration.
-
-Verification: Ensure body { overflow: hidden; } and #viewport { overflow-y: auto; }. The body must be locked to force the viewport div to handle the scroll.
-
-5. FUTURE ROADMAP (SCALABILITY)
-
-When scaling this application, follow this order of operations:
-
-Persistence: Implement localStorage in App.init (Load) and App.commitInput/App.toggleItem/App.deleteItem (Save).
-
-PWA: Add manifest.json and serviceWorker.js to enable "Add to Home Screen" and offline caching.
-
-Sync: (Far Future) Replace App.state.items with a Firebase/Supabase real-time listener.
+* **Role:** Human Operator (Architect/Product Owner) & Gemini (Junior Engineer/Vibe Coder).
+* **Workflow:** Conversational iterations -> "Code Golf" optimization -> Manual Review.
+* **Transparency:** All code was generated via the Gemini Canvas interface and reviewed for "AI Slop" (unnecessary complexity) before committing.
