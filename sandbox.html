@@ -3,46 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT Connectivity Test</title>
+    <title>MQTT Multi-Box Sync</title>
     <style>
         body { font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
         h1 { font-size: 1.2rem; border-bottom: 2px solid black; padding-bottom: 10px; }
         
+        .box-container { margin-bottom: 20px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
         textarea {
-            width: 100%; height: 150px; border: 2px solid black;
-            font-size: 1.2rem; padding: 10px; margin-bottom: 20px;
+            width: 100%; height: 80px; border: 2px solid black;
+            font-size: 1.2rem; padding: 10px;
         }
 
         #status-bar { background: #eee; padding: 10px; margin-bottom: 10px; font-weight: bold; }
         #logs {
-            background: #f4f4f4; border: 1px solid #ccc; height: 200px; overflow-y: scroll;
+            background: #f4f4f4; border: 1px solid #ccc; height: 150px; overflow-y: scroll;
             font-size: 0.8rem; padding: 10px; white-space: pre-wrap;
         }
         .log-entry { margin-bottom: 5px; border-bottom: 1px dashed #ddd; }
-        .out { color: blue; }
-        .in { color: green; }
-        .err { color: red; }
+        .in { color: green; } .err { color: red; }
     </style>
-    <!-- MQTT LIBRARY (Relay Strategy) -->
+    <!-- MQTT LIBRARY -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
-    <h1>🛠 MQTT Relay Sandbox</h1>
+    <h1>🛠 MQTT Multi-Channel Sandbox</h1>
     
     <div id="status-bar">
         Status: <span id="connection-status">🔴 Disconnected</span>
     </div>
 
-    <textarea id="shared-text" placeholder="Connecting to public relay..."></textarea>
+    <!-- BOX A -->
+    <div class="box-container">
+        <label>CHANNEL A</label>
+        <textarea id="box-a" data-channel="A" placeholder="Type in A..."></textarea>
+    </div>
+
+    <!-- BOX B -->
+    <div class="box-container">
+        <label>CHANNEL B</label>
+        <textarea id="box-b" data-channel="B" placeholder="Type in B..."></textarea>
+    </div>
 
     <h3>Debug Log</h3>
     <div id="logs"></div>
 
     <script>
         // --- CONFIGURATION ---
-        // We use a public, free broker. Note: Data is public!
         const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt'; 
-        const TOPIC = 'listolista/sandbox/alpha_v1'; // Unique topic to avoid noise
+        // We use a generated ID so every test session is unique (avoids noise from previous tests)
+        // In a real app, this would come from the URL hash.
+        const SESSION_ID = 'sandbox_multi_' + Math.floor(Math.random() * 1000);
+        const TOPIC = `listolista/sandbox/${SESSION_ID}`;
 
         // --- LOGGING ---
         function log(msg, type = '') {
@@ -60,67 +72,50 @@
         }
 
         // --- CORE LOGIC ---
-        log(`🚀 Initializing MQTT Relay...`);
-        log(`📡 Broker: ${BROKER_URL}`);
+        log(`🚀 Init Multi-Box Sync...`);
+        log(`📡 Topic: ${TOPIC}`);
         
         const client = mqtt.connect(BROKER_URL);
-        const textBox = document.getElementById('shared-text');
+        const boxes = document.querySelectorAll('textarea');
 
-        // 1. ON CONNECT
+        // 1. CONNECT
         client.on('connect', () => {
-            setStatus('🟢 Connected to Relay', 'green');
-            log('✅ Connected! Subscribing to topic...');
-            
-            client.subscribe(TOPIC, (err) => {
-                if (!err) {
-                    log(`👂 Listening on: ${TOPIC}`);
-                    // Announce presence
-                    client.publish(TOPIC, JSON.stringify({ type: 'presence', msg: 'New Peer Joined' }));
-                } else {
-                    log(`❌ Subscribe Error: ${err}`, 'err');
-                }
-            });
+            setStatus('🟢 Connected', 'green');
+            client.subscribe(TOPIC);
+            // Announce presence
+            client.publish(TOPIC, JSON.stringify({ type: 'presence', id: 'User-' + Math.floor(Math.random()*100) }));
         });
 
-        // 2. ON MESSAGE (Receive)
+        // 2. RECEIVE (The Router)
         client.on('message', (topic, message) => {
             try {
                 const payload = JSON.parse(message.toString());
                 
-                if (payload.type === 'text') {
-                    // Only update if content is different (avoid loop)
-                    if (textBox.value !== payload.data) {
-                        log(`📥 Received Update: "${payload.data.substring(0, 10)}..."`, 'in');
-                        textBox.value = payload.data;
-                        textBox.style.backgroundColor = '#e0ffe0';
-                        setTimeout(() => textBox.style.backgroundColor = 'white', 200);
+                if (payload.type === 'update') {
+                    // Find the specific box by ID
+                    const targetBox = document.getElementById(payload.elementId);
+                    if (targetBox && targetBox.value !== payload.data) {
+                        log(`📥 Update for ${payload.channel}`, 'in');
+                        targetBox.value = payload.data;
+                        // Flash effect
+                        targetBox.style.borderColor = 'green';
+                        setTimeout(() => targetBox.style.borderColor = 'black', 300);
                     }
-                } else if (payload.type === 'presence') {
-                    log(`👋 Peer Announcement: ${payload.msg}`, 'in');
                 }
-            } catch (e) {
-                log(`⚠️ Parse Error: ${e.message}`, 'err');
-            }
+            } catch (e) { log(`⚠️ Error: ${e.message}`, 'err'); }
         });
 
-        // 3. UI INPUT (Send)
-        textBox.addEventListener('input', () => {
-            const content = textBox.value;
-            // Publish to the relay
-            const payload = JSON.stringify({ type: 'text', data: content });
-            client.publish(TOPIC, payload, { retain: true }); // 'retain' keeps last message for new joiners
-            // log(`📤 Sent: ${content.length} chars`, 'out'); // Optional: noisy log
-        });
-
-        // 4. ERROR HANDLING
-        client.on('error', (err) => {
-            log(`🔥 MQTT Error: ${err}`, 'err');
-            setStatus('🔴 Connection Error', 'red');
-        });
-
-        client.on('offline', () => {
-            setStatus('⚫ Offline', 'gray');
-            log('⚠️ Connection lost', 'err');
+        // 3. SEND (The Broadcaster)
+        boxes.forEach(box => {
+            box.addEventListener('input', () => {
+                const packet = {
+                    type: 'update',
+                    elementId: box.id,      // "box-a" or "box-b"
+                    channel: box.dataset.channel, 
+                    data: box.value
+                };
+                client.publish(TOPIC, JSON.stringify(packet));
+            });
         });
 
     </script>
