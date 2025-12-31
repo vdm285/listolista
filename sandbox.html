@@ -3,175 +3,332 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT Multi-Box Sync</title>
+    <title>Smart Sync Sandbox v4</title>
     <style>
-        body { font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
-        h1 { font-size: 1.2rem; border-bottom: 2px solid black; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; background: #f0f2f5; }
         
-        .box-container { margin-bottom: 20px; }
-        label { font-weight: bold; display: block; margin-bottom: 5px; }
-        textarea {
-            width: 100%; height: 80px; border: 2px solid black;
-            font-size: 1.2rem; padding: 10px;
+        /* HEADER & CONTROLS */
+        header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            border-bottom: 3px solid #333; padding-bottom: 15px; margin-bottom: 20px;
         }
-
-        #status-bar { 
-            background: #eee; padding: 10px; margin-bottom: 20px; border: 1px solid #ccc;
-        }
-        
-        /* New Controls */
-        .control-panel { margin-top: 10px; display: flex; gap: 10px; }
+        h1 { margin: 0; font-size: 1.5rem; }
+        .controls { display: flex; gap: 10px; }
         button {
-            padding: 8px 12px; font-family: inherit; font-weight: bold;
-            cursor: pointer; border: 2px solid black; background: white;
+            padding: 8px 15px; cursor: pointer; font-weight: bold;
+            background: #fff; border: 2px solid #333; border-radius: 4px;
         }
         button:hover { background: #eee; }
-        button:active { transform: translateY(1px); }
 
-        #logs {
-            background: #f4f4f4; border: 1px solid #ccc; height: 150px; overflow-y: scroll;
-            font-size: 0.8rem; padding: 10px; white-space: pre-wrap;
+        /* MAIN LAYOUT */
+        .layout { display: grid; grid-template-columns: 250px 1fr 300px; gap: 20px; }
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+        /* LEFT: PEERS */
+        .panel { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .peer-item { padding: 5px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+        .peer-item.me { font-weight: bold; color: blue; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; background: #ccc; margin-right: 5px; }
+        .status-dot.online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
+
+        /* CENTER: INPUTS */
+        .input-group { margin-bottom: 15px; position: relative; }
+        label { font-size: 0.8rem; font-weight: bold; color: #666; display: flex; justify-content: space-between; }
+        textarea {
+            width: 100%; height: 60px; padding: 10px; border: 2px solid #ddd; border-radius: 4px;
+            font-family: monospace; font-size: 1rem; transition: all 0.2s;
         }
-        .log-entry { margin-bottom: 5px; border-bottom: 1px dashed #ddd; }
-        .in { color: green; } .err { color: red; }
+        
+        /* STATES */
+        textarea:focus { border-color: #333; outline: none; }
+        textarea.remote-editing { border-color: #ff9800; background: #fff3e0; } /* Orange warning */
+        textarea.synced { border-color: #4caf50; background: #e8f5e9; } /* Green success */
+        
+        .typing-badge {
+            position: absolute; right: 5px; top: -5px;
+            background: #ff9800; color: white; font-size: 0.7rem; padding: 2px 6px;
+            border-radius: 10px; opacity: 0; transition: opacity 0.2s;
+        }
+        .typing-badge.visible { opacity: 1; }
+
+        /* RIGHT: DEBUG */
+        #json-view { 
+            font-family: monospace; font-size: 0.75rem; white-space: pre-wrap; 
+            background: #282c34; color: #abb2bf; padding: 10px; border-radius: 4px;
+            max-height: 500px; overflow-y: auto;
+        }
+        
+        #connection-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .hidden { display: none !important; }
+
     </style>
-    <!-- MQTT LIBRARY -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
-    <h1>
-        <span>🛠 Sync Sandbox</span>
-        <small style="font-size: 0.8rem; font-weight: normal;">v2.0</small>
-    </h1>
-    
-    <div id="status-bar">
-        <div><strong>Room ID:</strong> <span id="room-id">...</span></div>
-        <div style="margin-top:5px;"><strong>Status:</strong> <span id="connection-status">🔴 Disconnected</span></div>
+
+    <div id="connection-overlay">
+        <h2>Connecting to Relay...</h2>
+        <div id="loading-txt">Please wait</div>
+    </div>
+
+    <header>
+        <div>
+            <h1>🛠 Smart Sync v4</h1>
+            <small id="room-display">Room: ...</small>
+        </div>
+        <div class="controls">
+            <button onclick="copyInvite()">🔗 Share</button>
+            <button onclick="newSession()">🔄 Reset</button>
+        </div>
+    </header>
+
+    <div class="layout">
         
-        <div class="control-panel">
-            <button id="btn-copy">🔗 Copy Invite Link</button>
-            <button id="btn-new">🔄 New Room</button>
+        <!-- LEFT: PRESENCE -->
+        <div class="panel">
+            <h3>👥 Active Users</h3>
+            <div id="peer-list">Waiting...</div>
+        </div>
+
+        <!-- CENTER: BOXES -->
+        <div class="panel">
+            <h3>📝 Inputs</h3>
+            <!-- Generated dynamically -->
+            <div id="inputs-container"></div>
+        </div>
+
+        <!-- RIGHT: X-RAY -->
+        <div class="panel">
+            <h3>🩻 Master JSON (Server State)</h3>
+            <div id="json-view">{}</div>
         </div>
     </div>
 
-    <!-- BOX A -->
-    <div class="box-container">
-        <label>CHANNEL A</label>
-        <textarea id="box-a" data-channel="A" placeholder="Type in A..."></textarea>
-    </div>
-
-    <!-- BOX B -->
-    <div class="box-container">
-        <label>CHANNEL B</label>
-        <textarea id="box-b" data-channel="B" placeholder="Type in B..."></textarea>
-    </div>
-
-    <h3>Debug Log</h3>
-    <div id="logs"></div>
-
     <script>
         // --- CONFIGURATION ---
-        const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt'; 
+        const BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+        const CHANNELS = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
+        const MY_ID = 'User_' + Math.floor(Math.random() * 1000);
         
-        // 1. GET OR GENERATE ROOM ID
-        function getRoomId() {
-            let hash = window.location.hash.replace('#', '');
-            if (!hash) {
-                // Generate a robust ID
-                hash = 'sandbox_' + Date.now().toString(36);
-                window.history.replaceState(null, null, '#' + hash);
-            }
-            return hash;
-        }
+        // --- STATE MANAGEMENT ---
+        // Structure: { [channelName]: { text: string, timestamp: number, lastAuthor: string } }
+        let LocalState = {}; 
+        let PeerPresences = {}; // { userId: lastSeenTimestamp }
 
-        const SESSION_ID = getRoomId();
-        const TOPIC = `listolista/sandbox/${SESSION_ID}`;
-
-        // Display Room ID
-        document.getElementById('room-id').innerText = SESSION_ID;
-
-        // --- CONTROLS LOGIC ---
-        document.getElementById('btn-copy').onclick = () => {
-            const url = window.location.href;
-            navigator.clipboard.writeText(url).then(() => {
-                alert('Invite Link Copied! Send this URL to your partner.');
-            });
-        };
-
-        document.getElementById('btn-new').onclick = () => {
-            if(confirm("Start a new disconnected session?")) {
-                // Clear hash and reload to generate new ID
-                window.location.hash = '';
-                window.location.reload();
-            }
-        };
-
-        // --- LOGGING ---
-        function log(msg, type = '') {
-            const box = document.getElementById('logs');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            box.prepend(entry);
-        }
-
-        function setStatus(msg, color) {
-            const el = document.getElementById('connection-status');
-            el.textContent = msg;
-            el.style.color = color;
-        }
-
-        // --- MQTT CORE ---
-        log(`🚀 Initializing...`);
-        
-        const client = mqtt.connect(BROKER_URL);
-        const boxes = document.querySelectorAll('textarea');
-
-        // 2. CONNECT
-        client.on('connect', () => {
-            setStatus('🟢 Connected', 'green');
-            client.subscribe(TOPIC);
-            // Announce presence
-            const userId = 'User-' + Math.floor(Math.random()*100);
-            client.publish(TOPIC, JSON.stringify({ type: 'presence', id: userId }));
-        });
-
-        // 3. RECEIVE
-        client.on('message', (topic, message) => {
-            try {
-                const payload = JSON.parse(message.toString());
-                
-                if (payload.type === 'update') {
-                    const targetBox = document.getElementById(payload.elementId);
-                    if (targetBox && targetBox.value !== payload.data) {
-                        log(`📥 Update for ${payload.channel}`, 'in');
-                        targetBox.value = payload.data;
-                        targetBox.style.borderColor = 'green';
-                        setTimeout(() => targetBox.style.borderColor = 'black', 300);
-                    }
-                } else if (payload.type === 'presence') {
-                    log(`👋 Peer Joined: ${payload.id}`, 'in');
+        // --- URL LOGIC ---
+        function getRoomFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            let room = params.get('room');
+            if (!room) {
+                room = 'room_' + Date.now().toString(36);
+                // Attempt to update URL, but fail gracefully if in sandbox/preview
+                try {
+                    const newUrl = window.location.pathname + '?room=' + room;
+                    window.history.replaceState(null, null, newUrl);
+                } catch (e) {
+                    console.warn("Could not update URL (likely due to sandbox environment):", e);
                 }
-            } catch (e) { log(`⚠️ Error: ${e.message}`, 'err'); }
-        });
+            }
+            return room;
+        }
+        const ROOM_ID = getRoomFromUrl();
+        document.getElementById('room-display').innerText = `Room: ${ROOM_ID}`;
+        
+        // Topics
+        const T_DATA = `listolista/v4/${ROOM_ID}/data`;     // Retained Master JSON
+        const T_TYPING = `listolista/v4/${ROOM_ID}/typing`; // Ephemeral typing events
+        const T_PRESENCE = `listolista/v4/${ROOM_ID}/alive`; // Heartbeats
 
-        // 4. SEND
-        boxes.forEach(box => {
-            box.addEventListener('input', () => {
-                const packet = {
-                    type: 'update',
-                    elementId: box.id,      
-                    channel: box.dataset.channel, 
-                    data: box.value
-                };
-                client.publish(TOPIC, JSON.stringify(packet), { retain: true });
+        // --- SETUP UI ---
+        const container = document.getElementById('inputs-container');
+        CHANNELS.forEach(name => {
+            // Init State
+            LocalState[name] = { text: "", timestamp: 0, lastAuthor: "" };
+
+            // Create DOM
+            const div = document.createElement('div');
+            div.className = 'input-group';
+            div.innerHTML = `
+                <label>
+                    ${name} <span style="font-weight:normal; font-size:0.7em" id="meta-${name}"></span>
+                </label>
+                <div id="badge-${name}" class="typing-badge">Someone is typing...</div>
+                <textarea id="box-${name}" data-name="${name}"></textarea>
+            `;
+            container.appendChild(div);
+
+            const el = document.getElementById(`box-${name}`);
+            
+            // TYPING EVENT (Ephemeral)
+            el.addEventListener('input', () => {
+                client.publish(T_TYPING, JSON.stringify({
+                    user: MY_ID,
+                    box: name
+                }));
             });
+
+            // COMMIT EVENT (Sync)
+            const commit = () => {
+                const newVal = el.value;
+                // Only send if different from what we think server has
+                // (Optimistic check, real check happens on merge)
+                if (newVal !== LocalState[name].text) {
+                    LocalState[name] = {
+                        text: newVal,
+                        timestamp: Date.now(),
+                        lastAuthor: MY_ID
+                    };
+                    publishState();
+                    el.classList.add('synced');
+                    setTimeout(() => el.classList.remove('synced'), 500);
+                }
+            };
+            el.addEventListener('blur', commit);
+            el.addEventListener('keydown', e => { if(e.key==='Enter') commit(); });
         });
 
-        client.on('error', (err) => {
-            log(`🔥 MQTT Error: ${err}`, 'err');
-            setStatus('🔴 Connection Error', 'red');
+        // --- MQTT LOGIC ---
+        const client = mqtt.connect(BROKER);
+
+        client.on('connect', () => {
+            document.getElementById('connection-overlay').classList.add('hidden');
+            client.subscribe([T_DATA, T_TYPING, T_PRESENCE]);
+            
+            // Start Heartbeat
+            setInterval(() => {
+                client.publish(T_PRESENCE, JSON.stringify({ id: MY_ID, ts: Date.now() }));
+                cullDeadPeers();
+            }, 3000);
         });
+
+        client.on('message', (topic, msg) => {
+            try {
+                const payload = JSON.parse(msg.toString());
+
+                if (topic === T_DATA) {
+                    handleSync(payload);
+                } 
+                else if (topic === T_TYPING) {
+                    handleTyping(payload);
+                }
+                else if (topic === T_PRESENCE) {
+                    handlePresence(payload);
+                }
+            } catch (e) { console.error(e); }
+        });
+
+        // --- 1. SMART MERGE LOGIC (Crucial) ---
+        function handleSync(remoteState) {
+            let uiUpdated = false;
+
+            Object.keys(remoteState).forEach(key => {
+                const localItem = LocalState[key];
+                const remoteItem = remoteState[key];
+
+                // If remote has data we don't, or remote data is NEWER
+                if (!localItem || (remoteItem.timestamp > localItem.timestamp)) {
+                    // Update Local State
+                    LocalState[key] = remoteItem;
+                    
+                    // Update UI (Only if user is not currently focusing/typing in that specific box)
+                    const el = document.getElementById(`box-${key}`);
+                    if (document.activeElement !== el) {
+                        el.value = remoteItem.text;
+                        // Visual flash
+                        el.style.backgroundColor = '#e3f2fd'; // Light Blue update
+                        setTimeout(() => el.style.backgroundColor = 'white', 500);
+                    }
+                    
+                    // Update metadata label
+                    const meta = document.getElementById(`meta-${key}`);
+                    if(meta) meta.innerText = `Updated by ${remoteItem.lastAuthor}`;
+                    
+                    uiUpdated = true;
+                }
+            });
+
+            if (uiUpdated) updateDebugView();
+        }
+
+        function publishState() {
+            // We publish the FULL state, but with updated timestamps for the changed fields.
+            // The receiver uses logic above to only accept the newer fields.
+            client.publish(T_DATA, JSON.stringify(LocalState), { retain: true });
+            updateDebugView();
+        }
+
+        // --- 2. TYPING INDICATOR ---
+        function handleTyping(packet) {
+            if (packet.user === MY_ID) return; // Ignore self
+            
+            const badge = document.getElementById(`badge-${packet.box}`);
+            const box = document.getElementById(`box-${packet.box}`);
+            
+            if (badge && box) {
+                badge.innerText = `${packet.user} is typing...`;
+                badge.classList.add('visible');
+                box.classList.add('remote-editing');
+                
+                // Clear after 1 second of silence
+                clearTimeout(box.typingTimeout);
+                box.typingTimeout = setTimeout(() => {
+                    badge.classList.remove('visible');
+                    box.classList.remove('remote-editing');
+                }, 1000);
+            }
+        }
+
+        // --- 3. PRESENCE SYSTEM ---
+        function handlePresence(packet) {
+            PeerPresences[packet.id] = Date.now();
+            renderPeers();
+        }
+
+        function cullDeadPeers() {
+            const now = Date.now();
+            Object.keys(PeerPresences).forEach(id => {
+                if (now - PeerPresences[id] > 10000) { // 10 seconds timeout
+                    delete PeerPresences[id];
+                }
+            });
+            renderPeers();
+        }
+
+        function renderPeers() {
+            const list = document.getElementById('peer-list');
+            list.innerHTML = `<div class="peer-item me"><span class="status-dot online"></span>${MY_ID} (You)</div>`;
+            
+            Object.keys(PeerPresences).forEach(id => {
+                if (id !== MY_ID) {
+                    list.innerHTML += `<div class="peer-item"><span class="status-dot online"></span>${id}</div>`;
+                }
+            });
+        }
+
+        // --- UTILS ---
+        function updateDebugView() {
+            document.getElementById('json-view').innerText = JSON.stringify(LocalState, null, 2);
+        }
+
+        window.copyInvite = () => {
+            navigator.clipboard.writeText(window.location.href);
+            alert("Invite link copied!");
+        };
+
+        window.newSession = () => {
+            if(confirm("Generate new room?")) {
+                try {
+                    window.location.search = '?room=room_' + Date.now();
+                } catch(e) {
+                    // Fallback for sandbox env where location reload might fail
+                    window.location.reload();
+                }
+            }
+        };
 
     </script>
 </body>
