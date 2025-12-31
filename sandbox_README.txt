@@ -11,7 +11,7 @@ How it Works
 
 The Broker: We connect to wss://broker.hivemq.com:8884/mqtt. This is a free, public server that acts as a "mirror."
 
-The Topic: We subscribe to a specific string (e.g., listolista/sandbox/...).
+The Topic: We subscribe to a specific string defined by the URL Hash (e.g., listolista/sandbox/sandbox_k92...).
 
 The Protocol:
 
@@ -23,12 +23,18 @@ This allows us to sync multiple independent fields over a single connection chan
 
 Limitations (The "Catch")
 
-Privacy: The topic is public. Anyone can listen. (Solved in Prod by using random UUIDs).
+Privacy: The topic is public. Anyone can listen if they guess the ID.
 
 Persistence: The broker does not store data long-term. It is for live sync only.
 
 Reliability: Free brokers can have rate limits.
 
-Next Step
+How to Test
 
-Integrate this MQTT logic into the main ListoLista app to enable "Live Co-working" that actually works on mobile data.
+Open sandbox.html.
+
+Copy the URL (ensure it has the #sandbox_... part).
+
+Send to another device.
+
+Type in Box A. It should appear on the other device.
