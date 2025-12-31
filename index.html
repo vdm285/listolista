@@ -168,6 +168,11 @@
         }
         #toast.show { opacity: 1; }
     </style>
+    <!-- TRYSTERO: The P2P Magic Library (7kB) -->
+    <script type="module">
+        import { joinRoom } from 'https://cdn.jsdelivr.net/npm/trystero@0.19.0/dist/trystero-torrent.min.js';
+        window.joinRoom = joinRoom; 
+    </script>
 </head>
 <body>
 
@@ -177,6 +182,7 @@
         </div>
         <div class="actions">
             <!-- Íconos: Guardar, Abrir, Compartir, Menú -->
+            <div class="icon-btn" id="btn-sync" title="Estado de Sync">📡</div>
             <div class="icon-btn" id="btn-save" title="Guardar archivo">💾</div>
             <div class="icon-btn" id="btn-open" title="Abrir archivo">📂</div>
             <div class="icon-btn" id="btn-share" title="Copiar lista">🔗</div>
@@ -214,6 +220,7 @@
                 items: [] 
             },
             config: { storageKey: 'listolista_v1' },
+            broadcast: null, // P2P Sender
 
             init() {
                 this.cacheDOM();
@@ -221,6 +228,9 @@
                 this.bind();
                 this.render();
                 this.dom.i1.focus();
+                
+                // Initialize P2P after a short delay to allow modules to load
+                setTimeout(() => this.initSync(), 500);
             },
 
             cacheDOM() {
@@ -235,6 +245,7 @@
                     btnOpen: document.getElementById('btn-open'),
                     btnShare: document.getElementById('btn-share'),
                     btnMenu: document.getElementById('btn-menu'),
+                    btnSync: document.getElementById('btn-sync'), // New Sync Icon
                     fileInput: document.getElementById('file-input'),
                     // Modal
                     modal: document.getElementById('modal-overlay'),
@@ -289,6 +300,92 @@
                         this.dom.modal.classList.add('hidden');
                     }
                 };
+                
+                // Sync Info Click
+                this.dom.btnSync.onclick = () => {
+                    const roomId = window.location.hash.replace('#', '');
+                    prompt("Tu ID de Sala (Comparte esto en la URL):", roomId);
+                };
+            },
+
+            // --- CAPA DE SINCRONIZACIÓN (P2P) ---
+            initSync() {
+                // 1. Get Room ID from URL hash or generate new
+                let roomId = window.location.hash.replace('#', '');
+                if (!roomId) {
+                    roomId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                    window.history.replaceState(null, null, '#' + roomId);
+                }
+                console.log("📡 Uniéndose a la sala:", roomId);
+
+                // 2. Connect via BitTorrent Trackers
+                try {
+                    // 'listolista_soul' is the "App ID" namespace
+                    const config = { appId: 'listolista_soul_v1' };
+                    const room = window.joinRoom(config, roomId);
+                    
+                    // 3. Create Data Channel
+                    const [sendUpdate, getUpdate] = room.makeAction('sync');
+                    this.broadcast = sendUpdate; 
+
+                    // 4. Listen for updates
+                    getUpdate((remoteState) => {
+                        console.log("📥 Recibido estado remoto");
+                        this.mergeState(remoteState);
+                    });
+
+                    // 5. Peer Join Event
+                    room.onPeerJoin(peerId => {
+                        console.log("👋 Nuevo peer conectado:", peerId);
+                        this.showToast("👋 ¡Un colaborador se ha unido!");
+                        // Send them our current state immediately so they catch up
+                        this.broadcast(this.state);
+                    });
+                    
+                    this.dom.btnSync.style.opacity = "1"; // Visual indicator active
+
+                } catch (e) {
+                    console.warn("Módulo P2P cargando o falló:", e);
+                    this.dom.btnSync.style.opacity = "0.3";
+                }
+            },
+
+            mergeState(remoteState) {
+                // Simple Merge Strategy: Union by ID + Last Write Wins on Title
+                let hasChanges = false;
+                const localMap = new Map(this.state.items.map(i => [i.id, i]));
+
+                // Update Title if remote is different (rudimentary conflict res)
+                if (remoteState.title && remoteState.title !== this.state.title) {
+                    this.state.title = remoteState.title;
+                    this.dom.title.innerText = this.state.title;
+                    hasChanges = true;
+                }
+
+                remoteState.items.forEach(rItem => {
+                    const lItem = localMap.get(rItem.id);
+                    
+                    // If item is new OR remote version is technically "newer" (in V1 we just trust remote for add/toggle)
+                    // For robust sync we'd compare timestamps, but for "Soul V1" union is safer
+                    if (!lItem) {
+                        localMap.set(rItem.id, rItem);
+                        hasChanges = true;
+                    } else {
+                        // If remote toggled it differently
+                        if (rItem.done !== lItem.done || rItem.txt !== lItem.txt) {
+                            // In a real CRDT we compare clocks. Here we let remote win to ensure propagation.
+                            localMap.set(rItem.id, rItem);
+                            hasChanges = true;
+                        }
+                    }
+                });
+
+                if (hasChanges) {
+                    this.state.items = Array.from(localMap.values());
+                    this.save(true); // Save but don't broadcast back to avoid loop
+                    this.render();
+                    this.showToast("🔄 Lista actualizada remotamente");
+                }
             },
 
             // --- CAPA DE PERSISTENCIA ---
@@ -307,8 +404,13 @@
                 this.dom.title.innerText = this.state.title || "MI LISTA";
             },
 
-            save() {
+            save(skipBroadcast = false) {
                 localStorage.setItem(this.config.storageKey, JSON.stringify(this.state));
+                
+                // Broadcast changes to P2P mesh
+                if (!skipBroadcast && this.broadcast) {
+                    this.broadcast(this.state);
+                }
             },
 
             // --- LÓGICA PRINCIPAL ---
@@ -389,31 +491,10 @@
             },
 
             actionShare() {
-                let text = `${this.state.title}\n\n`;
-                
-                const pending = this.state.items.filter(i => !i.done);
-                const completed = this.state.items.filter(i => i.done);
-
-                if (pending.length > 0) {
-                    text += "PENDIENTES:\n";
-                    pending.forEach(i => text += `[ ] ${i.txt}\n`);
-                }
-                
-                if (completed.length > 0) {
-                    text += "\nCOMPLETADOS:\n";
-                    completed.forEach(i => text += `[x] ${i.txt}\n`);
-                }
-
-                navigator.clipboard.writeText(text).then(() => {
-                    this.showToast("¡Lista copiada al portapapeles!");
-                }).catch(() => {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = text;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                    this.showToast("¡Lista copiada al portapapeles!");
+                // Now copies the URL with the Room ID hash!
+                const url = window.location.href;
+                navigator.clipboard.writeText(url).then(() => {
+                    this.showToast("¡Enlace de sala copiado!");
                 });
             },
 
