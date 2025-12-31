@@ -6,7 +6,7 @@
     <title>MQTT Multi-Box Sync</title>
     <style>
         body { font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
-        h1 { font-size: 1.2rem; border-bottom: 2px solid black; padding-bottom: 10px; }
+        h1 { font-size: 1.2rem; border-bottom: 2px solid black; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
         .box-container { margin-bottom: 20px; }
         label { font-weight: bold; display: block; margin-bottom: 5px; }
@@ -15,7 +15,19 @@
             font-size: 1.2rem; padding: 10px;
         }
 
-        #status-bar { background: #eee; padding: 10px; margin-bottom: 10px; font-weight: bold; }
+        #status-bar { 
+            background: #eee; padding: 10px; margin-bottom: 20px; border: 1px solid #ccc;
+        }
+        
+        /* New Controls */
+        .control-panel { margin-top: 10px; display: flex; gap: 10px; }
+        button {
+            padding: 8px 12px; font-family: inherit; font-weight: bold;
+            cursor: pointer; border: 2px solid black; background: white;
+        }
+        button:hover { background: #eee; }
+        button:active { transform: translateY(1px); }
+
         #logs {
             background: #f4f4f4; border: 1px solid #ccc; height: 150px; overflow-y: scroll;
             font-size: 0.8rem; padding: 10px; white-space: pre-wrap;
@@ -27,10 +39,19 @@
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
-    <h1>🛠 MQTT Multi-Channel Sandbox</h1>
+    <h1>
+        <span>🛠 Sync Sandbox</span>
+        <small style="font-size: 0.8rem; font-weight: normal;">v2.0</small>
+    </h1>
     
     <div id="status-bar">
-        Status: <span id="connection-status">🔴 Disconnected</span>
+        <div><strong>Room ID:</strong> <span id="room-id">...</span></div>
+        <div style="margin-top:5px;"><strong>Status:</strong> <span id="connection-status">🔴 Disconnected</span></div>
+        
+        <div class="control-panel">
+            <button id="btn-copy">🔗 Copy Invite Link</button>
+            <button id="btn-new">🔄 New Room</button>
+        </div>
     </div>
 
     <!-- BOX A -->
@@ -51,10 +72,39 @@
     <script>
         // --- CONFIGURATION ---
         const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt'; 
-        // We use a generated ID so every test session is unique (avoids noise from previous tests)
-        // In a real app, this would come from the URL hash.
-        const SESSION_ID = 'sandbox_multi_' + Math.floor(Math.random() * 1000);
+        
+        // 1. GET OR GENERATE ROOM ID
+        function getRoomId() {
+            let hash = window.location.hash.replace('#', '');
+            if (!hash) {
+                // Generate a robust ID
+                hash = 'sandbox_' + Date.now().toString(36);
+                window.history.replaceState(null, null, '#' + hash);
+            }
+            return hash;
+        }
+
+        const SESSION_ID = getRoomId();
         const TOPIC = `listolista/sandbox/${SESSION_ID}`;
+
+        // Display Room ID
+        document.getElementById('room-id').innerText = SESSION_ID;
+
+        // --- CONTROLS LOGIC ---
+        document.getElementById('btn-copy').onclick = () => {
+            const url = window.location.href;
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Invite Link Copied! Send this URL to your partner.');
+            });
+        };
+
+        document.getElementById('btn-new').onclick = () => {
+            if(confirm("Start a new disconnected session?")) {
+                // Clear hash and reload to generate new ID
+                window.location.hash = '';
+                window.location.reload();
+            }
+        };
 
         // --- LOGGING ---
         function log(msg, type = '') {
@@ -71,51 +121,56 @@
             el.style.color = color;
         }
 
-        // --- CORE LOGIC ---
-        log(`🚀 Init Multi-Box Sync...`);
-        log(`📡 Topic: ${TOPIC}`);
+        // --- MQTT CORE ---
+        log(`🚀 Initializing...`);
         
         const client = mqtt.connect(BROKER_URL);
         const boxes = document.querySelectorAll('textarea');
 
-        // 1. CONNECT
+        // 2. CONNECT
         client.on('connect', () => {
             setStatus('🟢 Connected', 'green');
             client.subscribe(TOPIC);
             // Announce presence
-            client.publish(TOPIC, JSON.stringify({ type: 'presence', id: 'User-' + Math.floor(Math.random()*100) }));
+            const userId = 'User-' + Math.floor(Math.random()*100);
+            client.publish(TOPIC, JSON.stringify({ type: 'presence', id: userId }));
         });
 
-        // 2. RECEIVE (The Router)
+        // 3. RECEIVE
         client.on('message', (topic, message) => {
             try {
                 const payload = JSON.parse(message.toString());
                 
                 if (payload.type === 'update') {
-                    // Find the specific box by ID
                     const targetBox = document.getElementById(payload.elementId);
                     if (targetBox && targetBox.value !== payload.data) {
                         log(`📥 Update for ${payload.channel}`, 'in');
                         targetBox.value = payload.data;
-                        // Flash effect
                         targetBox.style.borderColor = 'green';
                         setTimeout(() => targetBox.style.borderColor = 'black', 300);
                     }
+                } else if (payload.type === 'presence') {
+                    log(`👋 Peer Joined: ${payload.id}`, 'in');
                 }
             } catch (e) { log(`⚠️ Error: ${e.message}`, 'err'); }
         });
 
-        // 3. SEND (The Broadcaster)
+        // 4. SEND
         boxes.forEach(box => {
             box.addEventListener('input', () => {
                 const packet = {
                     type: 'update',
-                    elementId: box.id,      // "box-a" or "box-b"
+                    elementId: box.id,      
                     channel: box.dataset.channel, 
                     data: box.value
                 };
-                client.publish(TOPIC, JSON.stringify(packet));
+                client.publish(TOPIC, JSON.stringify(packet), { retain: true });
             });
+        });
+
+        client.on('error', (err) => {
+            log(`🔥 MQTT Error: ${err}`, 'err');
+            setStatus('🔴 Connection Error', 'red');
         });
 
     </script>
