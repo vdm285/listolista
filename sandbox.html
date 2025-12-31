@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Connectivity Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 1.2rem; border-bottom: 2px solid black; padding-bottom: 10px; }
+        
+        /* The Shared Canvas */
+        textarea {
+            width: 100%;
+            height: 150px;
+            border: 2px solid black;
+            font-size: 1.2rem;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Diagnostic Panel */
+        #status-bar {
+            background: #eee; padding: 10px; margin-bottom: 10px; font-weight: bold;
+        }
+        #logs {
+            background: #f4f4f4; border: 1px solid #ccc; height: 200px; overflow-y: scroll;
+            font-size: 0.8rem; padding: 10px; white-space: pre-wrap;
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px dashed #ddd; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+    <!-- MODULE: Trystero (BitTorrent Strategy) -->
+    <script type="module">
+        import { joinRoom } from 'https://cdn.jsdelivr.net/npm/trystero@0.19.0/dist/trystero-torrent.min.js';
+        
+        // --- 1. CONFIGURATION ---
+        // We use a hardcoded room ID for the sandbox to ensure everyone joins the same place.
+        // In production, this would be dynamic.
+        const CONFIG = { appId: 'listolista_debug_v1' };
+        const ROOM_ID = 'sandbox_room_alpha'; 
+
+        // --- 2. LOGGING UTILITY (Visual Console) ---
+        function log(msg, type = 'info') {
+            const box = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${msg}`;
+            box.prepend(entry); // Newest at top
+        }
+
+        // --- 3. CORE LOGIC ---
+        try {
+            log(`🚀 Initializing Trystero (Torrent Strategy)...`);
+            log(`🔑 AppID: ${CONFIG.appId} | Room: ${ROOM_ID}`);
+
+            const room = joinRoom(CONFIG, ROOM_ID);
+            
+            // Action: 'text-update' channel
+            const [sendText, getText] = room.makeAction('text-update');
+
+            // --- EVENT: PEER JOINED ---
+            room.onPeerJoin(peerId => {
+                log(`🟢 Peer Joined: ${peerId.substr(0, 6)}...`, 'success');
+                updatePeerCount(1);
+                // Send current state to new peer immediately
+                const currentTxt = document.getElementById('shared-text').value;
+                if(currentTxt) sendText(currentTxt);
+            });
+
+            // --- EVENT: PEER LEFT ---
+            room.onPeerLeave(peerId => {
+                log(`🔴 Peer Left: ${peerId.substr(0, 6)}...`);
+                updatePeerCount(-1);
+            });
+
+            // --- EVENT: RECEIVE DATA ---
+            getText((data, peerId) => {
+                log(`📥 Received ${data.length} chars from ${peerId.substr(0, 6)}...`);
+                const box = document.getElementById('shared-text');
+                // Simple "Last Arrived Wins" - OK for sandbox
+                if (box.value !== data) {
+                    box.value = data;
+                    // Visual flash to indicate update
+                    box.style.backgroundColor = '#e0ffe0';
+                    setTimeout(() => box.style.backgroundColor = 'white', 300);
+                }
+            });
+
+            // --- UI BINDING ---
+            const box = document.getElementById('shared-text');
+            box.oninput = () => {
+                // Broadcast on every keystroke
+                sendText(box.value);
+            };
+
+            log("📡 Setup Complete. Waiting for peers...");
+
+        } catch (e) {
+            log(`🔥 CRITICAL ERROR: ${e.message}`, 'error');
+        }
+
+        // --- HELPER: PEER COUNT ---
+        let count = 0;
+        function updatePeerCount(diff) {
+            count = Math.max(0, count + diff);
+            document.getElementById('p-count').innerText = count;
+        }
+
+    </script>
+</head>
+<body>
+    <h1>🛠 Sync Sandbox</h1>
+    
+    <div id="status-bar">
+        Status: <span id="p-count">0</span> Peers Connected
+    </div>
+
+    <textarea id="shared-text" placeholder="Type here. If connection works, text appears on other devices instantly..."></textarea>
+
+    <h3>Debug Log</h3>
+    <div id="logs"></div>
+</body>
+</html>
