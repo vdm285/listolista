@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Sync Sandbox v6</title>
+    <title>Smart Sync Sandbox v7</title>
     <style>
         body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; background: #f0f2f5; }
         
@@ -22,7 +22,7 @@
         #shared-title:focus { outline: none; border-bottom-color: #333; background: #fff; }
         #shared-title:empty:before { content: "Untitled Note"; color: #999; }
 
-        .controls { display: flex; gap: 10px; align-items: center; }
+        .controls { display: flex; gap: 10px; align-items: center; position: relative; }
         button {
             padding: 8px 15px; cursor: pointer; font-weight: bold;
             background: #fff; border: 2px solid #333; border-radius: 4px;
@@ -43,12 +43,21 @@
         .layout { display: grid; grid-template-columns: 250px 1fr 300px; gap: 20px; }
         @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
 
-        /* LEFT: PEERS */
-        .panel { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        /* LEFT: PEERS & MENU */
+        .panel { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .peer-item { padding: 5px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
         .peer-item.me { font-weight: bold; color: blue; }
         .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; background: #ccc; margin-right: 5px; }
         .status-dot.online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
+
+        /* Saved Rooms List */
+        .room-item { 
+            padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; 
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .room-item:hover { background: #f9f9f9; }
+        .room-item.active { background: #e3f2fd; font-weight: bold; }
+        .room-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
 
         /* CENTER: INPUTS */
         .input-group { margin-bottom: 15px; position: relative; }
@@ -107,7 +116,6 @@
             <div id="shared-title" contenteditable="true" spellcheck="false">My Shared Note</div>
             
             <div class="controls">
-                <button onclick="saveToMenu()">💾 Save to Menu (Mock)</button>
                 <button onclick="copyInvite()">🔗 Share</button>
                 <button onclick="newSession()">🔄 Reset</button>
             </div>
@@ -126,10 +134,17 @@
 
     <div class="layout">
         
-        <!-- LEFT: PRESENCE -->
-        <div class="panel">
-            <h3>👥 Active Users</h3>
-            <div id="peer-list">Waiting...</div>
+        <!-- LEFT: PEERS & MENU -->
+        <div class="left-col">
+            <div class="panel">
+                <h3>📚 Saved Lists</h3>
+                <div id="saved-rooms-list"></div>
+            </div>
+
+            <div class="panel">
+                <h3>👥 Active Users</h3>
+                <div id="peer-list">Waiting...</div>
+            </div>
         </div>
 
         <!-- CENTER: BOXES -->
@@ -151,8 +166,8 @@
         const BROKER = 'wss://broker.hivemq.com:8884/mqtt';
         const CHANNELS = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
         
-        // Generate random initial ID
-        let MY_ID = 'User_' + Math.floor(Math.random() * 1000);
+        // Generate random initial ID or load from storage
+        let MY_ID = localStorage.getItem('listolista_username') || 'User_' + Math.floor(Math.random() * 1000);
         
         // --- STATE MANAGEMENT ---
         // Structure: 
@@ -184,6 +199,38 @@
         const T_DRAFTS = `listolista/v6/${ROOM_ID}/drafts`; // Retained Draft Status
         const T_PRESENCE = `listolista/v6/${ROOM_ID}/alive`; // Heartbeats
 
+        // --- SAVED ROOMS LOGIC ---
+        function saveCurrentRoom() {
+            let rooms = JSON.parse(localStorage.getItem('listolista_rooms') || '{}');
+            // Update timestamp and title
+            rooms[ROOM_ID] = { 
+                title: LocalState.meta.title, 
+                lastVisited: Date.now() 
+            };
+            localStorage.setItem('listolista_rooms', JSON.stringify(rooms));
+            renderSavedRooms();
+        }
+
+        function renderSavedRooms() {
+            const list = document.getElementById('saved-rooms-list');
+            const rooms = JSON.parse(localStorage.getItem('listolista_rooms') || '{}');
+            const sortedIds = Object.keys(rooms).sort((a,b) => rooms[b].lastVisited - rooms[a].lastVisited);
+            
+            list.innerHTML = '';
+            if(sortedIds.length === 0) list.innerHTML = '<div style="color:#999;font-style:italic;">No saved lists yet</div>';
+
+            sortedIds.forEach(rid => {
+                const r = rooms[rid];
+                const div = document.createElement('div');
+                div.className = `room-item ${rid === ROOM_ID ? 'active' : ''}`;
+                div.innerHTML = `
+                    <div class="room-name" onclick="window.location.search='?room=${rid}'">${r.title || 'Untitled'}</div>
+                    <span style="font-size:0.8rem; color:#aaa;">${new Date(r.lastVisited).toLocaleDateString()}</span>
+                `;
+                list.appendChild(div);
+            });
+        }
+
         // --- UI BINDING: USERNAME ---
         const usernameEl = document.getElementById('my-username');
         usernameEl.innerText = MY_ID;
@@ -191,6 +238,7 @@
             const newName = usernameEl.innerText.trim();
             if(newName) {
                 MY_ID = newName;
+                localStorage.setItem('listolista_username', MY_ID);
                 // Force presence update immediately so others see name change
                 client.publish(T_PRESENCE, JSON.stringify({ id: MY_ID, ts: Date.now() }));
             }
@@ -214,6 +262,7 @@
                     lastAuthor: MY_ID
                 };
                 publishState();
+                saveCurrentRoom(); // Update local title cache
                 titleEl.classList.remove('remote-editing');
                 titleEl.classList.add('synced');
                 setTimeout(() => titleEl.classList.remove('synced'), 500);
@@ -243,7 +292,7 @@
 
             const el = document.getElementById(`box-${name}`);
             
-            // 1. TYPING LOGIC (With Idle Commit)
+            // 1. TYPING LOGIC (With Idle Commit - REDUCED TO 1s)
             let idleTimer = null;
 
             el.addEventListener('input', () => {
@@ -254,10 +303,10 @@
                 clearTimeout(idleTimer);
                 el.classList.remove('synced');
                 
-                // C. Set new 5s Timer
+                // C. Set new 1s Timer
                 idleTimer = setTimeout(() => {
-                    commit(name, el); // Auto-commit after 5s
-                }, 5000);
+                    commit(name, el); // Auto-commit after 1s
+                }, 1000);
             });
 
             // 2. COMMIT LOGIC (Manual or Auto)
@@ -293,6 +342,13 @@
             document.getElementById('connection-overlay').classList.add('hidden');
             client.subscribe([T_DATA, T_DRAFTS, T_PRESENCE]);
             
+            // RESEED LOGIC: Check if server is empty but we have local data for this room
+            // In a real app we'd load from a specific key per room. 
+            // For sandbox, we just trust the in-memory LocalState if not overwritten.
+            // (Real persistent storage per room not implemented in sandbox to keep it simple, 
+            // but Menu saves the metadata)
+            saveCurrentRoom();
+
             setInterval(() => {
                 client.publish(T_PRESENCE, JSON.stringify({ id: MY_ID, ts: Date.now() }));
                 cullDeadPeers();
@@ -318,9 +374,15 @@
             if (remoteState.meta && (!LocalState.meta || remoteState.meta.timestamp > LocalState.meta.timestamp)) {
                 LocalState.meta = remoteState.meta;
                 const tEl = document.getElementById('shared-title');
-                if (document.activeElement !== tEl) {
-                    tEl.innerText = remoteState.meta.title;
+                
+                // FORCE UPDATE LOGIC: Even if active, blur to prevent overwrite
+                if (document.activeElement === tEl) {
+                    tEl.blur(); // Force commit of whatever partial state (race condition) or just surrender
+                    // Actually, if remote is newer, we should surrender.
                 }
+                
+                tEl.innerText = remoteState.meta.title;
+                saveCurrentRoom(); // Update menu cache
                 uiUpdated = true;
             }
 
@@ -334,12 +396,19 @@
                         LocalState.items[key] = remoteItem;
                         
                         const el = document.getElementById(`box-${key}`);
-                        // Only overwrite if user is NOT currently typing
-                        if (document.activeElement !== el) {
-                            el.value = remoteItem.text;
-                            el.style.backgroundColor = '#e3f2fd';
-                            setTimeout(() => el.style.backgroundColor = 'white', 500);
+                        
+                        // FORCE UPDATE LOGIC: 
+                        // If user is typing in this box, and a NEWER update arrives from server...
+                        if (document.activeElement === el) {
+                            console.warn(`Force updating ${key} due to newer remote version.`);
+                            el.blur(); // Force focus loss
+                            el.classList.add('conflict'); // Visual warning
+                            setTimeout(() => el.classList.remove('conflict'), 1000);
                         }
+
+                        el.value = remoteItem.text;
+                        el.style.backgroundColor = '#e3f2fd';
+                        setTimeout(() => el.style.backgroundColor = 'white', 500);
                         
                         // Formatted Timestamp
                         const date = new Date(remoteItem.timestamp);
@@ -381,7 +450,7 @@
                 if (packet.active) {
                     badge.innerText = `${packet.user} is drafting...`;
                     badge.classList.add('visible');
-                    box.classList.add('remote-editing'); // Now sets background color too via CSS
+                    box.classList.add('remote-editing'); 
                     
                     clearTimeout(box.draftTimeout);
                     box.draftTimeout = setTimeout(() => {
@@ -436,9 +505,8 @@
             }
         };
         
-        window.saveToMenu = () => {
-            alert("Sandbox Mock: This would save room ID '" + ROOM_ID + "' to your local 'My Shared Notes' list.");
-        };
+        // Initial Render of saved rooms
+        renderSavedRooms();
 
     </script>
 </body>
