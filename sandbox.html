@@ -3,22 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Sync Sandbox v5</title>
+    <title>Smart Sync Sandbox v6</title>
     <style>
         body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; background: #f0f2f5; }
         
         /* HEADER & CONTROLS */
         header { 
-            display: flex; justify-content: space-between; align-items: center; 
+            display: flex; flex-direction: column; gap: 15px;
             border-bottom: 3px solid #333; padding-bottom: 15px; margin-bottom: 20px;
         }
-        h1 { margin: 0; font-size: 1.5rem; }
-        .controls { display: flex; gap: 10px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        
+        /* Shared Note Title */
+        #shared-title {
+            font-size: 1.5rem; font-weight: bold; padding: 5px; border-bottom: 2px dashed transparent;
+            cursor: text; min-width: 200px; display: inline-block;
+        }
+        #shared-title:focus { outline: none; border-bottom-color: #333; background: #fff; }
+        #shared-title:empty:before { content: "Untitled Note"; color: #999; }
+
+        .controls { display: flex; gap: 10px; align-items: center; }
         button {
             padding: 8px 15px; cursor: pointer; font-weight: bold;
             background: #fff; border: 2px solid #333; border-radius: 4px;
         }
         button:hover { background: #eee; }
+
+        /* USER IDENTITY UI */
+        .user-panel {
+            display: flex; align-items: center; gap: 10px; font-size: 0.9rem;
+            background: #e3f2fd; padding: 5px 10px; border-radius: 4px; border: 1px solid #90caf9;
+        }
+        #my-username {
+            font-weight: bold; cursor: text; border-bottom: 1px dashed #666;
+        }
+        #my-username:focus { outline: none; border-bottom: 1px solid #000; }
 
         /* MAIN LAYOUT */
         .layout { display: grid; grid-template-columns: 250px 1fr 300px; gap: 20px; }
@@ -41,7 +60,13 @@
         
         /* STATES */
         textarea:focus { border-color: #333; outline: none; }
-        textarea.remote-editing { border-color: #ff9800; background: #fff3e0; } /* Orange warning */
+        
+        /* Orange background for remote drafting */
+        textarea.remote-editing { 
+            border-color: #ff9800; 
+            background-color: #fff3e0 !important; /* Force orange tint */
+        } 
+        
         textarea.synced { border-color: #4caf50; background: #e8f5e9; } /* Green success */
         textarea.conflict { border-color: #f44336; } /* Red conflict warning */
         
@@ -77,13 +102,25 @@
     </div>
 
     <header>
-        <div>
-            <h1>🛠 Smart Sync v5</h1>
-            <small id="room-display">Room: ...</small>
+        <div class="header-top">
+            <!-- Shared Note Title -->
+            <div id="shared-title" contenteditable="true" spellcheck="false">My Shared Note</div>
+            
+            <div class="controls">
+                <button onclick="saveToMenu()">💾 Save to Menu (Mock)</button>
+                <button onclick="copyInvite()">🔗 Share</button>
+                <button onclick="newSession()">🔄 Reset</button>
+            </div>
         </div>
-        <div class="controls">
-            <button onclick="copyInvite()">🔗 Share</button>
-            <button onclick="newSession()">🔄 Reset</button>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <small id="room-display">Room: ...</small>
+            
+            <!-- Editable User Identity -->
+            <div class="user-panel">
+                <span>👤 You are:</span>
+                <span id="my-username" contenteditable="true" spellcheck="false">Anonymous</span>
+            </div>
         </div>
     </header>
 
@@ -113,13 +150,17 @@
         // --- CONFIGURATION ---
         const BROKER = 'wss://broker.hivemq.com:8884/mqtt';
         const CHANNELS = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
-        const MY_ID = 'User_' + Math.floor(Math.random() * 1000);
+        
+        // Generate random initial ID
+        let MY_ID = 'User_' + Math.floor(Math.random() * 1000);
         
         // --- STATE MANAGEMENT ---
-        let LocalState = {}; 
+        // Structure: 
+        // LocalState.items: { [channel]: { text, timestamp, lastAuthor, lastAuthorId } }
+        // LocalState.meta: { title, timestamp, lastAuthor }
+        let LocalState = { items: {}, meta: { title: "My Shared Note", timestamp: 0 } }; 
         let PeerPresences = {};
-        let Drafts = {}; // Tracks who is drafting what: { [channel]: { user: string, ts: number } }
-
+        
         // --- URL LOGIC ---
         function getRoomFromUrl() {
             const params = new URLSearchParams(window.location.search);
@@ -139,15 +180,54 @@
         document.getElementById('room-display').innerText = `Room: ${ROOM_ID}`;
         
         // Topics
-        const T_DATA = `listolista/v5/${ROOM_ID}/data`;     // Retained Master JSON
-        const T_DRAFTS = `listolista/v5/${ROOM_ID}/drafts`; // Retained Draft Status
-        const T_PRESENCE = `listolista/v5/${ROOM_ID}/alive`; // Heartbeats
+        const T_DATA = `listolista/v6/${ROOM_ID}/data`;     // Retained Master JSON
+        const T_DRAFTS = `listolista/v6/${ROOM_ID}/drafts`; // Retained Draft Status
+        const T_PRESENCE = `listolista/v6/${ROOM_ID}/alive`; // Heartbeats
 
-        // --- SETUP UI ---
+        // --- UI BINDING: USERNAME ---
+        const usernameEl = document.getElementById('my-username');
+        usernameEl.innerText = MY_ID;
+        usernameEl.addEventListener('blur', () => {
+            const newName = usernameEl.innerText.trim();
+            if(newName) {
+                MY_ID = newName;
+                // Force presence update immediately so others see name change
+                client.publish(T_PRESENCE, JSON.stringify({ id: MY_ID, ts: Date.now() }));
+            }
+        });
+        usernameEl.addEventListener('keydown', e => { 
+            if(e.key === 'Enter') { e.preventDefault(); usernameEl.blur(); } 
+        });
+
+        // --- UI BINDING: SHARED TITLE ---
+        const titleEl = document.getElementById('shared-title');
+        titleEl.addEventListener('input', () => {
+            // Live typing for title? Or commit? Let's use commit for consistency
+            titleEl.classList.add('remote-editing'); // Self-visual feedback
+        });
+        titleEl.addEventListener('blur', () => {
+            const newVal = titleEl.innerText.trim();
+            if(newVal !== LocalState.meta.title) {
+                LocalState.meta = {
+                    title: newVal,
+                    timestamp: Date.now(),
+                    lastAuthor: MY_ID
+                };
+                publishState();
+                titleEl.classList.remove('remote-editing');
+                titleEl.classList.add('synced');
+                setTimeout(() => titleEl.classList.remove('synced'), 500);
+            }
+        });
+        titleEl.addEventListener('keydown', e => { 
+            if(e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } 
+        });
+
+        // --- SETUP UI: BOXES ---
         const container = document.getElementById('inputs-container');
         CHANNELS.forEach(name => {
             // Init State
-            LocalState[name] = { text: "", timestamp: 0, lastAuthor: "" };
+            LocalState.items[name] = { text: "", timestamp: 0, lastAuthor: "", lastAuthorId: "" };
 
             // Create DOM
             const div = document.createElement('div');
@@ -185,8 +265,8 @@
                 clearTimeout(idleTimer);
                 
                 const newVal = inputEl.value;
-                if (newVal !== LocalState[channel].text) {
-                    LocalState[channel] = {
+                if (newVal !== LocalState.items[channel].text) {
+                    LocalState.items[channel] = {
                         text: newVal,
                         timestamp: Date.now(),
                         lastAuthor: MY_ID
@@ -233,26 +313,45 @@
         // --- 1. SMART MERGE LOGIC ---
         function handleSync(remoteState) {
             let uiUpdated = false;
-            Object.keys(remoteState).forEach(key => {
-                const localItem = LocalState[key];
-                const remoteItem = remoteState[key];
 
-                if (!localItem || (remoteItem.timestamp > localItem.timestamp)) {
-                    LocalState[key] = remoteItem;
-                    
-                    const el = document.getElementById(`box-${key}`);
-                    // Only overwrite if user is NOT currently typing
-                    if (document.activeElement !== el) {
-                        el.value = remoteItem.text;
-                        el.style.backgroundColor = '#e3f2fd';
-                        setTimeout(() => el.style.backgroundColor = 'white', 500);
-                    }
-                    
-                    const meta = document.getElementById(`meta-${key}`);
-                    if(meta) meta.innerText = `Updated by ${remoteItem.lastAuthor}`;
-                    uiUpdated = true;
+            // A. Sync Title
+            if (remoteState.meta && (!LocalState.meta || remoteState.meta.timestamp > LocalState.meta.timestamp)) {
+                LocalState.meta = remoteState.meta;
+                const tEl = document.getElementById('shared-title');
+                if (document.activeElement !== tEl) {
+                    tEl.innerText = remoteState.meta.title;
                 }
-            });
+                uiUpdated = true;
+            }
+
+            // B. Sync Items
+            if (remoteState.items) {
+                Object.keys(remoteState.items).forEach(key => {
+                    const localItem = LocalState.items[key];
+                    const remoteItem = remoteState.items[key];
+
+                    if (!localItem || (remoteItem.timestamp > localItem.timestamp)) {
+                        LocalState.items[key] = remoteItem;
+                        
+                        const el = document.getElementById(`box-${key}`);
+                        // Only overwrite if user is NOT currently typing
+                        if (document.activeElement !== el) {
+                            el.value = remoteItem.text;
+                            el.style.backgroundColor = '#e3f2fd';
+                            setTimeout(() => el.style.backgroundColor = 'white', 500);
+                        }
+                        
+                        // Formatted Timestamp
+                        const date = new Date(remoteItem.timestamp);
+                        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        
+                        const meta = document.getElementById(`meta-${key}`);
+                        if(meta) meta.innerText = `Updated by ${remoteItem.lastAuthor} on ${dateStr}`;
+                        uiUpdated = true;
+                    }
+                });
+            }
+            
             if (uiUpdated) updateDebugView();
         }
 
@@ -263,18 +362,13 @@
 
         // --- 2. DRAFTING INDICATOR (Orange State) ---
         function publishDraftStatus(channel, isDrafting) {
-            // We use a separate retained topic for drafts so new users see who is currently busy
-            // Packet: { [channel]: { user: "User_123", active: true/false } }
-            // Note: In a real app we'd merge this better, for sandbox we just broadcast the single change
             const packet = { 
                 channel: channel, 
                 user: MY_ID, 
                 active: isDrafting,
                 ts: Date.now()
             };
-            client.publish(T_DRAFTS, JSON.stringify(packet)); // No retain for drafts to prevent ghosts? 
-            // Actually, we WANT retain if we want to see status on load. But we need to handle clearing.
-            // Let's use ephemeral messaging for simplicity here to avoid "stuck" orange states.
+            client.publish(T_DRAFTS, JSON.stringify(packet));
         }
 
         function handleDrafts(packet) {
@@ -287,9 +381,8 @@
                 if (packet.active) {
                     badge.innerText = `${packet.user} is drafting...`;
                     badge.classList.add('visible');
-                    box.classList.add('remote-editing');
+                    box.classList.add('remote-editing'); // Now sets background color too via CSS
                     
-                    // Safety timeout: If no "done" signal received in 10s, clear it
                     clearTimeout(box.draftTimeout);
                     box.draftTimeout = setTimeout(() => {
                         badge.classList.remove('visible');
@@ -341,6 +434,10 @@
                     window.location.search = '?room=room_' + Date.now();
                 } catch(e) { window.location.reload(); }
             }
+        };
+        
+        window.saveToMenu = () => {
+            alert("Sandbox Mock: This would save room ID '" + ROOM_ID + "' to your local 'My Shared Notes' list.");
         };
 
     </script>
