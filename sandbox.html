@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Sync Sandbox v4</title>
+    <title>Smart Sync Sandbox v5</title>
     <style>
         body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; background: #f0f2f5; }
         
@@ -43,6 +43,7 @@
         textarea:focus { border-color: #333; outline: none; }
         textarea.remote-editing { border-color: #ff9800; background: #fff3e0; } /* Orange warning */
         textarea.synced { border-color: #4caf50; background: #e8f5e9; } /* Green success */
+        textarea.conflict { border-color: #f44336; } /* Red conflict warning */
         
         .typing-badge {
             position: absolute; right: 5px; top: -5px;
@@ -77,7 +78,7 @@
 
     <header>
         <div>
-            <h1>🛠 Smart Sync v4</h1>
+            <h1>🛠 Smart Sync v5</h1>
             <small id="room-display">Room: ...</small>
         </div>
         <div class="controls">
@@ -115,9 +116,9 @@
         const MY_ID = 'User_' + Math.floor(Math.random() * 1000);
         
         // --- STATE MANAGEMENT ---
-        // Structure: { [channelName]: { text: string, timestamp: number, lastAuthor: string } }
         let LocalState = {}; 
-        let PeerPresences = {}; // { userId: lastSeenTimestamp }
+        let PeerPresences = {};
+        let Drafts = {}; // Tracks who is drafting what: { [channel]: { user: string, ts: number } }
 
         // --- URL LOGIC ---
         function getRoomFromUrl() {
@@ -125,7 +126,6 @@
             let room = params.get('room');
             if (!room) {
                 room = 'room_' + Date.now().toString(36);
-                // Attempt to update URL, but fail gracefully if in sandbox/preview
                 try {
                     const newUrl = window.location.pathname + '?room=' + room;
                     window.history.replaceState(null, null, newUrl);
@@ -139,9 +139,9 @@
         document.getElementById('room-display').innerText = `Room: ${ROOM_ID}`;
         
         // Topics
-        const T_DATA = `listolista/v4/${ROOM_ID}/data`;     // Retained Master JSON
-        const T_TYPING = `listolista/v4/${ROOM_ID}/typing`; // Ephemeral typing events
-        const T_PRESENCE = `listolista/v4/${ROOM_ID}/alive`; // Heartbeats
+        const T_DATA = `listolista/v5/${ROOM_ID}/data`;     // Retained Master JSON
+        const T_DRAFTS = `listolista/v5/${ROOM_ID}/drafts`; // Retained Draft Status
+        const T_PRESENCE = `listolista/v5/${ROOM_ID}/alive`; // Heartbeats
 
         // --- SETUP UI ---
         const container = document.getElementById('inputs-container');
@@ -156,39 +156,54 @@
                 <label>
                     ${name} <span style="font-weight:normal; font-size:0.7em" id="meta-${name}"></span>
                 </label>
-                <div id="badge-${name}" class="typing-badge">Someone is typing...</div>
+                <div id="badge-${name}" class="typing-badge">Someone is drafting...</div>
                 <textarea id="box-${name}" data-name="${name}"></textarea>
             `;
             container.appendChild(div);
 
             const el = document.getElementById(`box-${name}`);
             
-            // TYPING EVENT (Ephemeral)
+            // 1. TYPING LOGIC (With Idle Commit)
+            let idleTimer = null;
+
             el.addEventListener('input', () => {
-                client.publish(T_TYPING, JSON.stringify({
-                    user: MY_ID,
-                    box: name
-                }));
+                // A. Signal "Drafting" (Orange State)
+                publishDraftStatus(name, true);
+                
+                // B. Reset Idle Timer
+                clearTimeout(idleTimer);
+                el.classList.remove('synced');
+                
+                // C. Set new 5s Timer
+                idleTimer = setTimeout(() => {
+                    commit(name, el); // Auto-commit after 5s
+                }, 5000);
             });
 
-            // COMMIT EVENT (Sync)
-            const commit = () => {
-                const newVal = el.value;
-                // Only send if different from what we think server has
-                // (Optimistic check, real check happens on merge)
-                if (newVal !== LocalState[name].text) {
-                    LocalState[name] = {
+            // 2. COMMIT LOGIC (Manual or Auto)
+            const commit = (channel, inputEl) => {
+                clearTimeout(idleTimer);
+                
+                const newVal = inputEl.value;
+                if (newVal !== LocalState[channel].text) {
+                    LocalState[channel] = {
                         text: newVal,
                         timestamp: Date.now(),
                         lastAuthor: MY_ID
                     };
                     publishState();
-                    el.classList.add('synced');
-                    setTimeout(() => el.classList.remove('synced'), 500);
+                    
+                    // Signal "Done Drafting" (Clear Orange)
+                    publishDraftStatus(channel, false);
+                    
+                    // Visual Success
+                    inputEl.classList.add('synced');
+                    setTimeout(() => inputEl.classList.remove('synced'), 1000);
                 }
             };
-            el.addEventListener('blur', commit);
-            el.addEventListener('keydown', e => { if(e.key==='Enter') commit(); });
+
+            el.addEventListener('blur', () => commit(name, el));
+            el.addEventListener('keydown', e => { if(e.key==='Enter') commit(name, el); });
         });
 
         // --- MQTT LOGIC ---
@@ -196,9 +211,8 @@
 
         client.on('connect', () => {
             document.getElementById('connection-overlay').classList.add('hidden');
-            client.subscribe([T_DATA, T_TYPING, T_PRESENCE]);
+            client.subscribe([T_DATA, T_DRAFTS, T_PRESENCE]);
             
-            // Start Heartbeat
             setInterval(() => {
                 client.publish(T_PRESENCE, JSON.stringify({ id: MY_ID, ts: Date.now() }));
                 cullDeadPeers();
@@ -209,76 +223,83 @@
             try {
                 const payload = JSON.parse(msg.toString());
 
-                if (topic === T_DATA) {
-                    handleSync(payload);
-                } 
-                else if (topic === T_TYPING) {
-                    handleTyping(payload);
-                }
-                else if (topic === T_PRESENCE) {
-                    handlePresence(payload);
-                }
+                if (topic === T_DATA) handleSync(payload);
+                else if (topic === T_DRAFTS) handleDrafts(payload);
+                else if (topic === T_PRESENCE) handlePresence(payload);
+                
             } catch (e) { console.error(e); }
         });
 
-        // --- 1. SMART MERGE LOGIC (Crucial) ---
+        // --- 1. SMART MERGE LOGIC ---
         function handleSync(remoteState) {
             let uiUpdated = false;
-
             Object.keys(remoteState).forEach(key => {
                 const localItem = LocalState[key];
                 const remoteItem = remoteState[key];
 
-                // If remote has data we don't, or remote data is NEWER
                 if (!localItem || (remoteItem.timestamp > localItem.timestamp)) {
-                    // Update Local State
                     LocalState[key] = remoteItem;
                     
-                    // Update UI (Only if user is not currently focusing/typing in that specific box)
                     const el = document.getElementById(`box-${key}`);
+                    // Only overwrite if user is NOT currently typing
                     if (document.activeElement !== el) {
                         el.value = remoteItem.text;
-                        // Visual flash
-                        el.style.backgroundColor = '#e3f2fd'; // Light Blue update
+                        el.style.backgroundColor = '#e3f2fd';
                         setTimeout(() => el.style.backgroundColor = 'white', 500);
                     }
                     
-                    // Update metadata label
                     const meta = document.getElementById(`meta-${key}`);
                     if(meta) meta.innerText = `Updated by ${remoteItem.lastAuthor}`;
-                    
                     uiUpdated = true;
                 }
             });
-
             if (uiUpdated) updateDebugView();
         }
 
         function publishState() {
-            // We publish the FULL state, but with updated timestamps for the changed fields.
-            // The receiver uses logic above to only accept the newer fields.
             client.publish(T_DATA, JSON.stringify(LocalState), { retain: true });
             updateDebugView();
         }
 
-        // --- 2. TYPING INDICATOR ---
-        function handleTyping(packet) {
-            if (packet.user === MY_ID) return; // Ignore self
-            
-            const badge = document.getElementById(`badge-${packet.box}`);
-            const box = document.getElementById(`box-${packet.box}`);
+        // --- 2. DRAFTING INDICATOR (Orange State) ---
+        function publishDraftStatus(channel, isDrafting) {
+            // We use a separate retained topic for drafts so new users see who is currently busy
+            // Packet: { [channel]: { user: "User_123", active: true/false } }
+            // Note: In a real app we'd merge this better, for sandbox we just broadcast the single change
+            const packet = { 
+                channel: channel, 
+                user: MY_ID, 
+                active: isDrafting,
+                ts: Date.now()
+            };
+            client.publish(T_DRAFTS, JSON.stringify(packet)); // No retain for drafts to prevent ghosts? 
+            // Actually, we WANT retain if we want to see status on load. But we need to handle clearing.
+            // Let's use ephemeral messaging for simplicity here to avoid "stuck" orange states.
+        }
+
+        function handleDrafts(packet) {
+            if (packet.user === MY_ID) return;
+
+            const badge = document.getElementById(`badge-${packet.channel}`);
+            const box = document.getElementById(`box-${packet.channel}`);
             
             if (badge && box) {
-                badge.innerText = `${packet.user} is typing...`;
-                badge.classList.add('visible');
-                box.classList.add('remote-editing');
-                
-                // Clear after 1 second of silence
-                clearTimeout(box.typingTimeout);
-                box.typingTimeout = setTimeout(() => {
+                if (packet.active) {
+                    badge.innerText = `${packet.user} is drafting...`;
+                    badge.classList.add('visible');
+                    box.classList.add('remote-editing');
+                    
+                    // Safety timeout: If no "done" signal received in 10s, clear it
+                    clearTimeout(box.draftTimeout);
+                    box.draftTimeout = setTimeout(() => {
+                        badge.classList.remove('visible');
+                        box.classList.remove('remote-editing');
+                    }, 10000);
+                } else {
                     badge.classList.remove('visible');
                     box.classList.remove('remote-editing');
-                }, 1000);
+                    clearTimeout(box.draftTimeout);
+                }
             }
         }
 
@@ -291,9 +312,7 @@
         function cullDeadPeers() {
             const now = Date.now();
             Object.keys(PeerPresences).forEach(id => {
-                if (now - PeerPresences[id] > 10000) { // 10 seconds timeout
-                    delete PeerPresences[id];
-                }
+                if (now - PeerPresences[id] > 10000) delete PeerPresences[id];
             });
             renderPeers();
         }
@@ -301,11 +320,8 @@
         function renderPeers() {
             const list = document.getElementById('peer-list');
             list.innerHTML = `<div class="peer-item me"><span class="status-dot online"></span>${MY_ID} (You)</div>`;
-            
             Object.keys(PeerPresences).forEach(id => {
-                if (id !== MY_ID) {
-                    list.innerHTML += `<div class="peer-item"><span class="status-dot online"></span>${id}</div>`;
-                }
+                if (id !== MY_ID) list.innerHTML += `<div class="peer-item"><span class="status-dot online"></span>${id}</div>`;
             });
         }
 
@@ -323,10 +339,7 @@
             if(confirm("Generate new room?")) {
                 try {
                     window.location.search = '?room=room_' + Date.now();
-                } catch(e) {
-                    // Fallback for sandbox env where location reload might fail
-                    window.location.reload();
-                }
+                } catch(e) { window.location.reload(); }
             }
         };
 
