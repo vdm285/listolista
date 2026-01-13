@@ -89,11 +89,6 @@
         .done { background-color: #fcfcfc; color: #aaa; }
         .done .txt { text-decoration: line-through; }
         
-        /* REMOTE EDITING STATE (From Sandbox) */
-        .remote-editing { 
-            background-color: #fff3e0 !important; /* Orange tint */
-            border-left: 4px solid #ff9800; /* Visual indicator */
-        }
         .synced { background-color: #e8f5e9 !important; transition: background 0.5s; }
 
         /* --- MODALES --- */
@@ -106,7 +101,7 @@
         .hidden { display: none !important; }
 
         .modal-box {
-            background: var(--color-bg); width: 85%; max-width: 320px;
+            background: var(--color-bg); width: 90%; max-width: 360px;
             border: 2px solid var(--color-text); padding: 1.5rem;
             box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
             max-height: 80vh; overflow-y: auto;
@@ -124,10 +119,16 @@
         .user-row { padding: 5px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
         .dot { width: 8px; height: 8px; background: #4caf50; border-radius: 50%; }
         
-        /* Saved Rooms Styles */
+        /* Saved Rooms Styles (Two Column) */
+        .lib-columns { display: flex; gap: 15px; }
+        .lib-col { flex: 1; }
+        .lib-col h4 { font-size: 0.8rem; text-transform: uppercase; color: #888; border-bottom: 1px solid #eee; margin-bottom: 5px; }
+        
         .saved-room { padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; }
-        .saved-room strong { display: block; font-size: 1rem; }
-        .saved-room span { font-size: 0.8rem; color: #888; }
+        .saved-room strong { display: block; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .saved-room span { font-size: 0.7rem; color: #aaa; }
+        .saved-room:hover { background: #f9f9f9; }
+        .active-room { background: #e3f2fd; }
 
         #file-input { display: none; }
         #toast {
@@ -138,8 +139,9 @@
         #toast.show { opacity: 1; }
         
         /* Connection Status Dot */
-        #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: #f44336; position: absolute; top: 12px; right: 12px; border: 1px solid white; }
+        #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; position: absolute; top: 12px; right: 12px; border: 1px solid white; }
         #conn-dot.green { background: #4caf50; }
+        #conn-dot.orange { background: #ff9800; } /* Local Mode */
 
     </style>
     <!-- MQTT Library for P2P Sync -->
@@ -149,7 +151,7 @@
 
     <header>
         <div id="title-container">
-            <div id="title" contenteditable="true" spellcheck="false">LISTOLISTA</div>
+            <div id="title" contenteditable="true" spellcheck="false">NUEVA LISTA</div>
         </div>
         <div class="actions">
             <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
@@ -160,7 +162,7 @@
     </header>
 
     <main id="viewport">
-        <!-- Input Stream -->
+        <!-- Input Stream (Purely Local) -->
         <div class="slot"><input id="i1" placeholder="Escribe aquí..." autocomplete="off"></div>
         <div class="slot"><input id="i2" placeholder="Escribe aquí..." autocomplete="off"></div>
         
@@ -190,6 +192,7 @@
             </div>
             <div id="peer-list">
                 <!-- Populated dynamically -->
+                <div style="color:#999; font-style:italic; padding:10px;">Modo Local (Offline)</div>
             </div>
             <div class="menu-opt" id="close-users" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
         </div>
@@ -197,10 +200,20 @@
 
     <!-- MODAL: LIBRARY (Saved Lists) -->
     <div id="modal-library" class="modal-overlay hidden">
-        <div class="modal-box">
-            <h3 class="menu-header">Mis Listas Guardadas</h3>
-            <div id="saved-list-container">
-                <!-- Populated dynamically -->
+        <div class="modal-box" style="max-width: 500px;">
+            <h3 class="menu-header">Biblioteca</h3>
+            <div class="lib-columns">
+                <div class="lib-col">
+                    <h4>Mis Listas (Local)</h4>
+                    <div id="list-local-container"></div>
+                    <div style="margin-top:10px; text-align:center;">
+                        <button id="btn-new-local" style="padding:5px 10px; font-size:0.8rem; cursor:pointer;">+ Nueva</button>
+                    </div>
+                </div>
+                <div class="lib-col" style="border-left:1px solid #eee; padding-left:15px;">
+                    <h4>Listas Compartidas</h4>
+                    <div id="list-shared-container"></div>
+                </div>
             </div>
             <div class="menu-opt" id="close-library" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
         </div>
@@ -215,33 +228,40 @@
             // --- CONFIGURATION ---
             config: { 
                 broker: 'wss://broker.hivemq.com:8884/mqtt',
-                storageKey: 'listolista_v2_current', // Changed key to separate from old version
-                libraryKey: 'listolista_library'
+                // Keys for indexes
+                indexLocal: 'listolista_index_local',
+                indexShared: 'listolista_index_shared',
+                // Prefix for data storage
+                storePrefix: 'listolista_data_'
             },
             
             // --- STATE ---
             state: { 
-                items: [], // Array of { id, text, done, timestamp, lastAuthor }
-                meta: { title: "LISTOLISTA", timestamp: 0 }
+                items: [], 
+                meta: { title: "NUEVA LISTA", timestamp: 0, lastAuthor: "" }
             },
             
             // --- RUNTIME ---
             myId: localStorage.getItem('listolista_username') || 'User_' + Math.floor(Math.random() * 1000),
             peers: {},
-            drafts: {},
             client: null,
-            roomId: null,
+            roomId: null, // If null, we are in Local Mode
+            isShared: false,
 
             init() {
                 this.cacheDOM();
-                this.setupRoom();
+                this.detectMode(); // Check URL for Room ID
                 this.load(); 
                 this.bind();
-                this.connectMQTT();
+                
+                if (this.isShared) {
+                    this.connectMQTT();
+                } else {
+                    this.dom.connDot.className = 'orange'; // Local Mode
+                }
+                
                 this.render();
                 this.dom.i1.focus();
-                
-                // Set username in UI
                 this.dom.username.innerText = this.myId;
             },
 
@@ -254,7 +274,8 @@
                     cBox: document.getElementById('completed-box'),
                     username: document.getElementById('my-username'),
                     peerList: document.getElementById('peer-list'),
-                    savedList: document.getElementById('saved-list-container'),
+                    localList: document.getElementById('list-local-container'),
+                    sharedList: document.getElementById('list-shared-container'),
                     connDot: document.getElementById('conn-dot'),
                     toast: document.getElementById('toast'),
                     fileInput: document.getElementById('file-input'),
@@ -265,44 +286,50 @@
                 };
             },
 
-            setupRoom() {
+            detectMode() {
                 const params = new URLSearchParams(window.location.search);
-                let room = params.get('room');
-                if (!room) {
-                    // Default/Offline room or Generate new? 
-                    // For V2, we default to a "Local" room, but if user wants to share, we generate ID.
-                    // Actually, to make sync work immediately, let's generate a room if none exists but 
-                    // treat it as local until shared.
-                    room = localStorage.getItem('last_room_id') || 'room_' + Date.now().toString(36);
-                    // Update URL silently
-                    try {
-                        const newUrl = window.location.pathname + '?room=' + room;
-                        window.history.replaceState(null, null, newUrl);
-                    } catch(e) {}
+                const room = params.get('room');
+                const localId = params.get('local');
+
+                if (room) {
+                    // SHARED MODE
+                    this.isShared = true;
+                    this.roomId = room;
+                    this.topics = {
+                        data: `listolista/v2/${room}/data`,
+                        presence: `listolista/v2/${room}/presence`
+                    };
+                    // Save to Shared Index
+                    this.updateLibraryIndex(this.config.indexShared, room);
+                } else {
+                    // LOCAL MODE
+                    this.isShared = false;
+                    // If no ID provided, generate one for this session (ephemeral until saved) or load last
+                    this.roomId = localId || localStorage.getItem('last_local_id') || 'local_' + Date.now();
+                    
+                    // If it's a new local ID, update URL silently to keep state refresh-proof
+                    if (!localId) {
+                        try {
+                            const newUrl = window.location.pathname + '?local=' + this.roomId;
+                            window.history.replaceState(null, null, newUrl);
+                        } catch (e) {
+                            console.warn("History update failed (likely sandbox):", e);
+                        }
+                    }
+                    
+                    localStorage.setItem('last_local_id', this.roomId);
+                    // Save to Local Index
+                    this.updateLibraryIndex(this.config.indexLocal, this.roomId);
                 }
-                this.roomId = room;
-                localStorage.setItem('last_room_id', room);
-                
-                // MQTT Topics
-                this.topics = {
-                    data: `listolista/v2/${room}/data`,
-                    drafts: `listolista/v2/${room}/drafts`,
-                    presence: `listolista/v2/${room}/presence`
-                };
             },
 
             bind() {
-                // Inputs (Smart Commit Logic)
+                // Inputs (Purely Local - No Drafting Sync)
                 [this.dom.i1, this.dom.i2].forEach(input => {
-                    let idleTimer;
-                    
-                    input.oninput = () => {
-                        this.broadcastDraft(true);
-                        clearTimeout(idleTimer);
-                        idleTimer = setTimeout(() => this.addItem(input), 1000); // 1s idle commit
-                    };
                     input.onkeydown = e => { if (e.key === 'Enter') this.addItem(input); };
-                    input.onblur = () => this.addItem(input);
+                    input.onblur = () => { 
+                        if(input.value.trim()) this.addItem(input); 
+                    };
                 });
 
                 // Title
@@ -310,15 +337,19 @@
                     this.state.meta.title = this.dom.title.innerText;
                     this.state.meta.timestamp = Date.now();
                     this.save();
-                    this.publishState();
+                    if(this.isShared) this.publishState();
                 };
-                this.dom.title.onblur = () => this.saveLibrary(); // Update library on blur
+                this.dom.title.onblur = () => {
+                    // Update index title on blur
+                    const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
+                    this.updateLibraryIndex(key, this.roomId);
+                };
 
                 // Username
                 this.dom.username.onblur = () => {
                     this.myId = this.dom.username.innerText;
                     localStorage.setItem('listolista_username', this.myId);
-                    this.publishPresence();
+                    if(this.isShared) this.publishPresence();
                 };
 
                 // Icons
@@ -328,13 +359,39 @@
                     this.renderLibrary();
                     this.toggleModal('mLib');
                 };
+                
+                // SHARE LOGIC (The Pivot)
                 document.getElementById('btn-share').onclick = () => {
-                    navigator.clipboard.writeText(window.location.href);
-                    this.showToast("🔗 Enlace copiado al portapapeles");
-                    this.saveLibrary(); // Sharing implicitly saves the room
+                    if (!this.isShared) {
+                        if(confirm("¿Convertir esta lista en compartida?")) {
+                            // 1. Generate new Room ID
+                            const newRoomId = 'room_' + Date.now().toString(36);
+                            
+                            // 2. Migrate Data (Save to new key)
+                            const currentData = JSON.stringify(this.state);
+                            localStorage.setItem(this.config.storePrefix + newRoomId, currentData);
+                            
+                            // 3. Switch Mode
+                            try {
+                                window.location.search = '?room=' + newRoomId;
+                            } catch (e) {
+                                // Fallback for sandbox
+                                window.location.reload();
+                            }
+                        }
+                    } else {
+                        // Already shared, just copy link
+                        navigator.clipboard.writeText(window.location.href);
+                        this.showToast("🔗 Enlace de sala copiado");
+                    }
                 };
 
-                // Modal Close Buttons
+                document.getElementById('btn-new-local').onclick = () => {
+                    const newId = 'local_' + Date.now();
+                    window.location.search = '?local=' + newId;
+                };
+
+                // Modals
                 document.getElementById('close-menu').onclick = () => this.dom.mMenu.classList.add('hidden');
                 document.getElementById('close-users').onclick = () => this.dom.mUsers.classList.add('hidden');
                 document.getElementById('close-library').onclick = () => this.dom.mLib.classList.add('hidden');
@@ -346,15 +403,15 @@
                 
                 document.getElementById('opt-clear').onclick = () => {
                     this.state.items = this.state.items.filter(i => !i.done);
-                    this.state.meta.timestamp = Date.now(); // Mark change
-                    this.save(); this.publishState();
+                    this.state.meta.timestamp = Date.now();
+                    this.save(); if(this.isShared) this.publishState();
                     this.render(); this.dom.mMenu.classList.add('hidden');
                 };
                 document.getElementById('opt-wipe').onclick = () => {
                     if(confirm("¿Borrar todo?")) {
                         this.state.items = [];
                         this.state.meta.timestamp = Date.now();
-                        this.save(); this.publishState();
+                        this.save(); if(this.isShared) this.publishState();
                         this.render(); this.dom.mMenu.classList.add('hidden');
                     }
                 };
@@ -363,10 +420,7 @@
             // --- CORE LOGIC ---
             addItem(inputEl) {
                 const txt = inputEl.value.trim();
-                if (!txt) {
-                    this.broadcastDraft(false); // Clear typing status if empty
-                    return;
-                }
+                if (!txt) return;
 
                 this.state.items.push({
                     id: Date.now(),
@@ -377,10 +431,9 @@
                 });
 
                 inputEl.value = '';
-                inputEl.focus(); // Keep focus for rapid entry
-                this.broadcastDraft(false);
+                inputEl.focus();
                 this.save();
-                this.publishState();
+                if(this.isShared) this.publishState();
                 this.render();
             },
 
@@ -388,9 +441,9 @@
                 const item = this.state.items.find(i => i.id === id);
                 if (item) {
                     item.done = !item.done;
-                    item.timestamp = Date.now(); // Update timestamp for conflict res
+                    item.timestamp = Date.now(); 
                     this.save();
-                    this.publishState();
+                    if(this.isShared) this.publishState();
                     this.render();
                 }
             },
@@ -398,26 +451,23 @@
             deleteItem(id, e) {
                 e.stopPropagation();
                 this.state.items = this.state.items.filter(i => i.id !== id);
-                // We update meta timestamp to ensure deletion propagates? 
-                // Actually deletions in "Full State" sync just propagate by absence.
-                // But we update timestamp to ensure "Latest Wins" logic works on receiver.
                 this.state.meta.timestamp = Date.now(); 
                 this.save();
-                this.publishState();
+                if(this.isShared) this.publishState();
                 this.render();
             },
 
-            // --- MQTT SYNC ---
+            // --- MQTT SYNC (Only for Shared Mode) ---
             connectMQTT() {
                 this.client = mqtt.connect(this.config.broker);
                 
                 this.client.on('connect', () => {
-                    this.dom.connDot.classList.add('green');
-                    this.client.subscribe([this.topics.data, this.topics.drafts, this.topics.presence]);
+                    this.dom.connDot.className = 'green';
+                    this.client.subscribe([this.topics.data, this.topics.presence]);
                     this.publishPresence();
-                    setInterval(() => this.publishPresence(), 5000); // Heartbeat
+                    setInterval(() => this.publishPresence(), 5000); 
                     
-                    // If we have local data, re-seed the server (Optimistic)
+                    // Optimistic Reseed
                     if (this.state.items.length > 0) this.publishState();
                 });
 
@@ -425,7 +475,6 @@
                     try {
                         const payload = JSON.parse(msg.toString());
                         if (topic === this.topics.data) this.handleSync(payload);
-                        else if (topic === this.topics.drafts) this.handleDrafts(payload);
                         else if (topic === this.topics.presence) this.handlePresence(payload);
                     } catch(e) {}
                 });
@@ -434,7 +483,7 @@
             handleSync(remoteState) {
                 let changed = false;
 
-                // 1. Sync Metadata (Title)
+                // 1. Sync Title
                 if (remoteState.meta && remoteState.meta.timestamp > this.state.meta.timestamp) {
                     this.state.meta = remoteState.meta;
                     this.dom.title.innerText = remoteState.meta.title;
@@ -442,10 +491,8 @@
                 }
 
                 // 2. Sync Items (Smart Merge)
-                // Since this is a list (Array), we use ID map for merging
                 const localMap = new Map(this.state.items.map(i => [i.id, i]));
                 
-                // Check remote items against local
                 remoteState.items.forEach(rItem => {
                     const lItem = localMap.get(rItem.id);
                     if (!lItem || rItem.timestamp > lItem.timestamp) {
@@ -454,19 +501,11 @@
                     }
                 });
 
-                // NOTE: Deletions are tricky in "State Dump" mode. 
-                // If I delete item A, my state doesn't have it.
-                // If remote state HAS it, merging might bring it back.
-                // For V2 Simplicity: We trust the "Newer" payload entirely if it has a newer meta timestamp?
-                // Or we stick to Union?
-                // Let's stick to Union (Additive) for safety in V2. Deletions propagate if we adopt the remote list entirely?
-                // No, that risks overwrites. 
-                // COMPROMISE: If remote meta timestamp is significantly newer (>2s), accept remote state entirely.
+                // Force Update Logic
                 if (remoteState.meta.timestamp > this.state.meta.timestamp + 2000) {
                     this.state = remoteState;
                     changed = true;
                 } else {
-                    // Regular item merge
                     if (changed) this.state.items = Array.from(localMap.values());
                 }
 
@@ -474,14 +513,6 @@
                     this.save();
                     this.render();
                 }
-            },
-
-            handleDrafts(packet) {
-                // If someone is typing (but not me), show orange background on inputs?
-                // Actually, for the main list, we don't have "Boxes" like sandbox.
-                // But we can highlight specific Items if they are being edited?
-                // Sandbox logic was for fixed inputs. For dynamic list, we skip this visual for now 
-                // to keep UI clean as requested ("List items should not look chunky").
             },
 
             handlePresence(packet) {
@@ -501,52 +532,56 @@
                 }
             },
 
-            broadcastDraft(isTyping) {
-                // Optional: Send typing status if we want to implement "User X is typing..." later
-            },
-
-            // --- PERSISTENCE ---
+            // --- PERSISTENCE & LIBRARY ---
             save() {
-                localStorage.setItem(this.config.storageKey + '_' + this.roomId, JSON.stringify(this.state));
-                this.saveLibrary();
+                localStorage.setItem(this.config.storePrefix + this.roomId, JSON.stringify(this.state));
+                // Update Last Visited in Index
+                const indexKey = this.isShared ? this.config.indexShared : this.config.indexLocal;
+                this.updateLibraryIndex(indexKey, this.roomId);
             },
 
             load() {
-                const data = localStorage.getItem(this.config.storageKey + '_' + this.roomId);
+                const data = localStorage.getItem(this.config.storePrefix + this.roomId);
                 if (data) {
                     try { this.state = JSON.parse(data); } catch(e) {}
                 }
-                this.dom.title.innerText = this.state.meta.title;
+                this.dom.title.innerText = this.state.meta.title || "NUEVA LISTA";
             },
 
-            // --- LIBRARY LOGIC ---
-            saveLibrary() {
-                let lib = JSON.parse(localStorage.getItem(this.config.libraryKey) || '{}');
-                lib[this.roomId] = {
-                    title: this.state.meta.title,
+            updateLibraryIndex(indexKey, id) {
+                let index = JSON.parse(localStorage.getItem(indexKey) || '{}');
+                index[id] = {
+                    title: this.state.meta.title || "Sin Título",
                     lastVisited: Date.now()
                 };
-                localStorage.setItem(this.config.libraryKey, JSON.stringify(lib));
+                localStorage.setItem(indexKey, JSON.stringify(index));
             },
 
             renderLibrary() {
-                const lib = JSON.parse(localStorage.getItem(this.config.libraryKey) || '{}');
-                const list = this.dom.savedList;
-                list.innerHTML = '';
-                
-                const sorted = Object.keys(lib).sort((a,b) => lib[b].lastVisited - lib[a].lastVisited);
-                if (sorted.length === 0) list.innerHTML = '<div style="padding:10px;color:#999;">Sin listas guardadas</div>';
+                const renderCol = (key, containerId, isSharedCol) => {
+                    const index = JSON.parse(localStorage.getItem(key) || '{}');
+                    const container = document.getElementById(containerId);
+                    container.innerHTML = '';
+                    
+                    const sorted = Object.keys(index).sort((a,b) => index[b].lastVisited - index[a].lastVisited);
+                    if(sorted.length === 0) container.innerHTML = '<div style="color:#aaa;font-size:0.8rem;padding:5px;">Vacío</div>';
 
-                sorted.forEach(rid => {
-                    const item = lib[rid];
-                    const div = document.createElement('div');
-                    div.className = 'saved-room';
-                    div.innerHTML = `<strong>${item.title}</strong><span>${new Date(item.lastVisited).toLocaleDateString()}</span>`;
-                    div.onclick = () => {
-                        window.location.search = '?room=' + rid;
-                    };
-                    list.appendChild(div);
-                });
+                    sorted.forEach(rid => {
+                        const meta = index[rid];
+                        const div = document.createElement('div');
+                        div.className = `saved-room ${rid === this.roomId ? 'active-room' : ''}`;
+                        div.innerHTML = `<strong>${meta.title}</strong><span>Updated: ${new Date(meta.lastVisited).toLocaleDateString()}</span>`;
+                        div.onclick = () => {
+                            // Determine query param based on column
+                            const param = isSharedCol ? 'room' : 'local';
+                            window.location.search = `?${param}=${rid}`;
+                        };
+                        container.appendChild(div);
+                    });
+                };
+
+                renderCol(this.config.indexLocal, 'list-local-container', false);
+                renderCol(this.config.indexShared, 'list-shared-container', true);
             },
 
             // --- RENDER ---
@@ -554,9 +589,8 @@
                 this.dom.pBox.innerHTML = '';
                 this.dom.cBox.innerHTML = '';
 
-                // Sort: Pending (Oldest First), Done (Newest First)
                 const pending = this.state.items.filter(i => !i.done).sort((a,b) => a.timestamp - b.timestamp);
-                const completed = this.state.items.filter(i => i.done).sort((a,b) => b.timestamp - a.timestamp); // Using timestamp as proxy for deathTime
+                const completed = this.state.items.filter(i => i.done).sort((a,b) => b.timestamp - a.timestamp);
 
                 pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
                 completed.forEach(i => this.dom.cBox.appendChild(this.createRow(i)));
@@ -585,10 +619,17 @@
             renderPeers() {
                 const list = this.dom.peerList;
                 list.innerHTML = '';
+                
+                if (!this.isShared) {
+                    list.innerHTML = '<div style="color:#999; font-style:italic; padding:10px;">Modo Local (Offline)</div>';
+                    return;
+                }
+
                 const now = Date.now();
+                list.innerHTML = `<div class="user-row"><div class="dot"></div>${this.myId} (Tú)</div>`;
                 
                 Object.keys(this.peers).forEach(pid => {
-                    if (now - this.peers[pid] < 10000) { // 10s timeout
+                    if (now - this.peers[pid] < 10000) { 
                         const div = document.createElement('div');
                         div.className = 'user-row';
                         div.innerHTML = `<div class="dot"></div>${pid}`;
@@ -614,7 +655,7 @@
                 const blob = new Blob([JSON.stringify(this.state)], {type: "application/json"});
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `backup_${this.roomId}.json`;
+                a.download = `backup_${this.state.meta.title}.json`;
                 a.click();
             },
             
@@ -625,7 +666,9 @@
                 r.onload = (evt) => {
                     try {
                         this.state = JSON.parse(evt.target.result);
-                        this.save(); this.publishState(); this.render();
+                        this.save(); 
+                        if(this.isShared) this.publishState(); 
+                        this.render();
                         this.dom.mMenu.classList.add('hidden');
                     } catch(err) { alert("Error archivo"); }
                 };
