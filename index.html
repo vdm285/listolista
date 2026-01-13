@@ -260,7 +260,7 @@
             
             // --- STATE ---
             state: { 
-                items: [], 
+                items: [], // Array of { id, text, done, deleted, timestamp, lastAuthor }
                 meta: { title: "NUEVA LISTA", timestamp: 0, lastAuthor: "" }
             },
             
@@ -429,16 +429,32 @@
 
                 // Header Actions (Direct)
                 document.getElementById('btn-clear').onclick = () => {
-                    this.state.items = this.state.items.filter(i => !i.done);
-                    this.state.meta.timestamp = Date.now();
-                    this.save(); if(this.isShared) this.publishState();
-                    this.render();
+                    // Mark as deleted instead of filter
+                    let changed = false;
+                    this.state.items.forEach(i => {
+                        if (i.done && !i.deleted) {
+                            i.deleted = true;
+                            i.timestamp = Date.now();
+                            changed = true;
+                        }
+                    });
+                    if (changed) {
+                        this.state.meta.timestamp = Date.now();
+                        this.save(); 
+                        if(this.isShared) this.publishState();
+                        this.render();
+                    }
                 };
                 document.getElementById('btn-wipe').onclick = () => {
                     if(confirm("¿Borrar todo?")) {
-                        this.state.items = [];
+                        // Soft delete all items for sync propagation
+                        this.state.items.forEach(i => {
+                            i.deleted = true;
+                            i.timestamp = Date.now();
+                        });
                         this.state.meta.timestamp = Date.now();
-                        this.save(); if(this.isShared) this.publishState();
+                        this.save(); 
+                        if(this.isShared) this.publishState();
                         this.render();
                     }
                 };
@@ -459,6 +475,7 @@
                     id: Date.now(),
                     text: txt,
                     done: false,
+                    deleted: false, // New Field for Tombstone
                     timestamp: Date.now(),
                     lastAuthor: this.myId
                 });
@@ -483,11 +500,16 @@
 
             deleteItem(id, e) {
                 e.stopPropagation();
-                this.state.items = this.state.items.filter(i => i.id !== id);
-                this.state.meta.timestamp = Date.now(); 
-                this.save();
-                if(this.isShared) this.publishState();
-                this.render();
+                const item = this.state.items.find(i => i.id === id);
+                if (item) {
+                    // Soft Delete (Tombstone)
+                    item.deleted = true;
+                    item.timestamp = Date.now();
+                    this.state.meta.timestamp = Date.now(); 
+                    this.save();
+                    if(this.isShared) this.publishState();
+                    this.render();
+                }
             },
 
             // --- MQTT SYNC (Only for Shared Mode) ---
@@ -524,26 +546,20 @@
                     changed = true;
                 }
 
-                // 2. Sync Items (DELETION FIX: Trust Newer State)
-                // If remote meta timestamp is significantly newer (>2s), 
-                // we assume it represents the authoritative state including deletions.
-                if (remoteState.meta.timestamp > this.state.meta.timestamp + 2000) {
-                    this.state = remoteState;
-                    changed = true;
-                } else {
-                    // Merging logic for updates/additions if timestamps are close
-                    const localMap = new Map(this.state.items.map(i => [i.id, i]));
-                    remoteState.items.forEach(rItem => {
-                        const lItem = localMap.get(rItem.id);
-                        if (!lItem || rItem.timestamp > lItem.timestamp) {
-                            localMap.set(rItem.id, rItem);
-                            changed = true;
-                        }
-                    });
-                    if (changed) this.state.items = Array.from(localMap.values());
-                }
+                // 2. Sync Items (Smart Merge with Tombstones)
+                const localMap = new Map(this.state.items.map(i => [i.id, i]));
+                
+                remoteState.items.forEach(rItem => {
+                    const lItem = localMap.get(rItem.id);
+                    // Update if remote item is newer OR we don't have it (and it's not a ghost of something we deleted earlier? No, timestamps handle this)
+                    if (!lItem || rItem.timestamp > lItem.timestamp) {
+                        localMap.set(rItem.id, rItem);
+                        changed = true;
+                    }
+                });
 
                 if (changed) {
+                    this.state.items = Array.from(localMap.values());
                     this.save();
                     this.render();
                 }
@@ -628,8 +644,9 @@
                 this.dom.pBox.innerHTML = '';
                 this.dom.cBox.innerHTML = '';
 
-                const pending = this.state.items.filter(i => !i.done).sort((a,b) => a.timestamp - b.timestamp);
-                const completed = this.state.items.filter(i => i.done).sort((a,b) => b.timestamp - a.timestamp);
+                // Filter out deleted items (Tombstones)
+                const pending = this.state.items.filter(i => !i.done && !i.deleted).sort((a,b) => a.timestamp - b.timestamp);
+                const completed = this.state.items.filter(i => i.done && !i.deleted).sort((a,b) => b.timestamp - a.timestamp);
 
                 pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
                 completed.forEach(i => this.dom.cBox.appendChild(this.createRow(i)));
