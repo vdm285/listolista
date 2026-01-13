@@ -41,157 +41,126 @@
         }
 
         /* TÍTULO EDITABLE */
-        #title-container {
-            flex-grow: 1;
-            margin-right: 10px;
-        }
+        #title-container { flex-grow: 1; margin-right: 10px; overflow: hidden; }
         #title { 
-            font-weight: bold; 
-            font-size: 0.9rem; 
-            text-transform: uppercase; 
-            letter-spacing: 1px; 
-            padding: 5px;
-            border-bottom: 1px dashed transparent;
-            display: inline-block;
+            font-weight: bold; font-size: 0.9rem; text-transform: uppercase; 
+            letter-spacing: 1px; padding: 5px; 
+            border-bottom: 1px dashed transparent; display: inline-block;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
         }
-        #title:focus {
-            outline: none;
-            border-bottom: 1px dashed var(--color-text);
-            background: #f9f9f9;
-        }
+        #title:focus { outline: none; border-bottom: 1px dashed var(--color-text); background: #f9f9f9; }
 
         /* ACCIONES DEL ENCABEZADO */
-        .actions {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .icon-btn {
-            cursor: pointer;
-            font-size: 1.2rem;
-            line-height: 1;
-            user-select: none;
-        }
+        .actions { display: flex; align-items: center; gap: 15px; }
+        .icon-btn { cursor: pointer; font-size: 1.2rem; line-height: 1; user-select: none; }
         .icon-btn:hover { opacity: 0.7; }
         .icon-btn:active { transform: scale(0.95); }
 
         /* --- ÁREA DE VISUALIZACIÓN --- */
         main {
-            position: absolute;
-            top: var(--h-header);
-            bottom: 0;
-            left: 0; right: 0;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
+            position: absolute; top: var(--h-header); bottom: 0; left: 0; right: 0;
+            overflow-y: auto; display: flex; flex-direction: column;
         }
 
         /* --- FLUJO DE ENTRADA --- */
         .slot {
-            min-height: var(--h-item);
-            border-bottom: 1px solid var(--color-dim);
-            display: flex;
-            align-items: center;
-            padding: 0 1rem;
+            min-height: var(--h-item); border-bottom: 1px solid var(--color-dim);
+            display: flex; align-items: center; padding: 0 1rem;
         }
-
         .slot input {
-            width: 100%; height: 100%; border: none;
-            font-size: 1.1rem; font-family: inherit; outline: none; background: transparent;
+            width: 100%; height: 100%; border: none; font-size: 1.1rem; 
+            font-family: inherit; outline: none; background: transparent;
         }
 
         /* --- ÍTEMS DE LA LISTA --- */
         .row {
-            min-height: var(--h-item);
-            border-bottom: 1px solid var(--color-dim);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 1rem;
-            cursor: pointer;
-            user-select: none;
-            transition: background 0.1s;
+            min-height: var(--h-item); border-bottom: 1px solid var(--color-dim);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 1rem; cursor: pointer; user-select: none; transition: background 0.2s;
         }
-
-        .txt { flex-grow: 1; font-size: 1.1rem; padding: 12px 0; }
+        .txt { flex-grow: 1; font-size: 1.1rem; padding: 12px 0; pointer-events: none; } /* Text not directly editable yet */
         
         .del {
-            padding: 10px 0 10px 20px;
-            color: var(--color-text);
-            font-weight: bold;
-            font-size: 1.4rem;
+            padding: 10px 0 10px 20px; color: var(--color-text);
+            font-weight: bold; font-size: 1.4rem;
         }
 
-        /* ESTADO: COMPLETADO */
+        /* ESTADOS DE ÍTEM */
         .done { background-color: #fcfcfc; color: #aaa; }
         .done .txt { text-decoration: line-through; }
+        
+        /* REMOTE EDITING STATE (From Sandbox) */
+        .remote-editing { 
+            background-color: #fff3e0 !important; /* Orange tint */
+            border-left: 4px solid #ff9800; /* Visual indicator */
+        }
+        .synced { background-color: #e8f5e9 !important; transition: background 0.5s; }
 
-        /* --- MODAL DE MENÚ --- */
-        #modal-overlay {
+        /* --- MODALES --- */
+        .modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.4);
-            z-index: 50;
+            background: rgba(0,0,0,0.4); z-index: 50;
             display: flex; justify-content: center; align-items: center;
             backdrop-filter: blur(2px);
         }
-        
         .hidden { display: none !important; }
 
-        #modal-box {
-            background: var(--color-bg);
-            width: 80%;
-            max-width: 300px;
-            border: 2px solid var(--color-text);
-            padding: 1.5rem;
+        .modal-box {
+            background: var(--color-bg); width: 85%; max-width: 320px;
+            border: 2px solid var(--color-text); padding: 1.5rem;
             box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
+            max-height: 80vh; overflow-y: auto;
         }
 
         .menu-opt {
-            padding: 10px 0;
-            border-bottom: 1px dashed var(--color-dim);
-            font-size: 1rem;
-            color: #555;
-            cursor: pointer;
+            padding: 10px 0; border-bottom: 1px dashed var(--color-dim);
+            font-size: 1rem; color: #555; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .menu-opt:last-child { border-bottom: none; }
         .menu-opt:hover { color: #000; }
-        
-        /* INPUT DE ARCHIVO OCULTO */
-        #file-input { display: none; }
+        .menu-header { margin-top:0; text-transform:uppercase; font-size:0.9rem; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px; }
 
-        /* NOTIFICACIÓN TOAST */
+        /* User List Styles */
+        .user-row { padding: 5px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+        .dot { width: 8px; height: 8px; background: #4caf50; border-radius: 50%; }
+        
+        /* Saved Rooms Styles */
+        .saved-room { padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; }
+        .saved-room strong { display: block; font-size: 1rem; }
+        .saved-room span { font-size: 0.8rem; color: #888; }
+
+        #file-input { display: none; }
         #toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
             background: #000; color: #fff; padding: 10px 20px; border-radius: 4px;
-            font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none;
-            white-space: nowrap;
+            font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
         }
         #toast.show { opacity: 1; }
+        
+        /* Connection Status Dot */
+        #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: #f44336; position: absolute; top: 12px; right: 12px; border: 1px solid white; }
+        #conn-dot.green { background: #4caf50; }
+
     </style>
-    <!-- TRYSTERO: The P2P Magic Library (7kB) -->
-    <script type="module">
-        import { joinRoom } from 'https://cdn.jsdelivr.net/npm/trystero@0.19.0/dist/trystero-torrent.min.js';
-        window.joinRoom = joinRoom; 
-    </script>
+    <!-- MQTT Library for P2P Sync -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
 
     <header>
         <div id="title-container">
-            <div id="title" contenteditable="true" spellcheck="false">MI LISTA</div>
+            <div id="title" contenteditable="true" spellcheck="false">LISTOLISTA</div>
         </div>
         <div class="actions">
-            <!-- Íconos: Guardar, Abrir, Compartir, Menú -->
-            <div class="icon-btn" id="btn-sync" title="Estado de Sync">📡</div>
-            <div class="icon-btn" id="btn-save" title="Guardar archivo">💾</div>
-            <div class="icon-btn" id="btn-open" title="Abrir archivo">📂</div>
-            <div class="icon-btn" id="btn-share" title="Copiar lista">🔗</div>
+            <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
+            <div class="icon-btn" id="btn-users" title="Usuarios">👥<div id="conn-dot"></div></div>
+            <div class="icon-btn" id="btn-share" title="Compartir">🔗</div>
             <div class="icon-btn" id="btn-menu" title="Menú">☰</div>
         </div>
     </header>
 
     <main id="viewport">
-        <!-- Flujo de Entrada -->
+        <!-- Input Stream -->
         <div class="slot"><input id="i1" placeholder="Escribe aquí..." autocomplete="off"></div>
         <div class="slot"><input id="i2" placeholder="Escribe aquí..." autocomplete="off"></div>
         
@@ -199,38 +168,81 @@
         <div id="completed-box"></div>
     </main>
 
-    <!-- MODAL DE MENÚ -->
-    <div id="modal-overlay" class="hidden">
-        <div id="modal-box">
-            <h3 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">Opciones</h3>
-            <div class="menu-opt" id="opt-clear">Limpiar completados</div>
-            <div class="menu-opt" id="opt-wipe">Borrar todo</div>
-            <div class="menu-opt" style="font-weight:bold; margin-top:10px;" id="close-btn">Cerrar</div>
+    <!-- MODAL: MENU -->
+    <div id="modal-menu" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 class="menu-header">Opciones</h3>
+            <div class="menu-opt" id="opt-save">💾 Guardar Backup (.json)</div>
+            <div class="menu-opt" id="opt-open">📂 Abrir Backup</div>
+            <div class="menu-opt" id="opt-clear">🧹 Limpiar completados</div>
+            <div class="menu-opt" id="opt-wipe" style="color:#d32f2f;">🔥 Borrar todo</div>
+            <div class="menu-opt" id="close-menu" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
         </div>
     </div>
 
-    <!-- Elementos Ocultos -->
+    <!-- MODAL: USERS -->
+    <div id="modal-users" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 class="menu-header">Usuarios Activos</h3>
+            <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+                <label style="font-size:0.8rem; font-weight:bold; color:#666;">TU NOMBRE:</label>
+                <div id="my-username" contenteditable="true" style="font-weight:bold; border-bottom:1px dashed #999; padding:2px;">Anon</div>
+            </div>
+            <div id="peer-list">
+                <!-- Populated dynamically -->
+            </div>
+            <div class="menu-opt" id="close-users" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
+        </div>
+    </div>
+
+    <!-- MODAL: LIBRARY (Saved Lists) -->
+    <div id="modal-library" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 class="menu-header">Mis Listas Guardadas</h3>
+            <div id="saved-list-container">
+                <!-- Populated dynamically -->
+            </div>
+            <div class="menu-opt" id="close-library" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
+        </div>
+    </div>
+
+    <!-- Hidden Elements -->
     <input type="file" id="file-input" accept=".json">
-    <div id="toast">¡Copiado al portapapeles!</div>
+    <div id="toast">¡Notificación!</div>
 
     <script>
         const App = {
-            state: { 
-                title: "MI LISTA",
-                items: [] 
+            // --- CONFIGURATION ---
+            config: { 
+                broker: 'wss://broker.hivemq.com:8884/mqtt',
+                storageKey: 'listolista_v2_current', // Changed key to separate from old version
+                libraryKey: 'listolista_library'
             },
-            config: { storageKey: 'listolista_v1' },
-            broadcast: null, // P2P Sender
+            
+            // --- STATE ---
+            state: { 
+                items: [], // Array of { id, text, done, timestamp, lastAuthor }
+                meta: { title: "LISTOLISTA", timestamp: 0 }
+            },
+            
+            // --- RUNTIME ---
+            myId: localStorage.getItem('listolista_username') || 'User_' + Math.floor(Math.random() * 1000),
+            peers: {},
+            drafts: {},
+            client: null,
+            roomId: null,
 
             init() {
                 this.cacheDOM();
-                this.load(); // Cargar desde LocalStorage
+                this.setupRoom();
+                this.load(); 
                 this.bind();
+                this.connectMQTT();
                 this.render();
                 this.dom.i1.focus();
                 
-                // Initialize P2P after a short delay to allow modules to load
-                setTimeout(() => this.initSync(), 500);
+                // Set username in UI
+                this.dom.username.innerText = this.myId;
             },
 
             cacheDOM() {
@@ -240,262 +252,356 @@
                     i2: document.getElementById('i2'),
                     pBox: document.getElementById('pending-box'),
                     cBox: document.getElementById('completed-box'),
-                    // Acciones
-                    btnSave: document.getElementById('btn-save'),
-                    btnOpen: document.getElementById('btn-open'),
-                    btnShare: document.getElementById('btn-share'),
-                    btnMenu: document.getElementById('btn-menu'),
-                    btnSync: document.getElementById('btn-sync'), // New Sync Icon
+                    username: document.getElementById('my-username'),
+                    peerList: document.getElementById('peer-list'),
+                    savedList: document.getElementById('saved-list-container'),
+                    connDot: document.getElementById('conn-dot'),
+                    toast: document.getElementById('toast'),
                     fileInput: document.getElementById('file-input'),
-                    // Modal
-                    modal: document.getElementById('modal-overlay'),
-                    closeBtn: document.getElementById('close-btn'),
-                    optClear: document.getElementById('opt-clear'),
-                    optWipe: document.getElementById('opt-wipe'),
-                    toast: document.getElementById('toast')
+                    // Modals
+                    mMenu: document.getElementById('modal-menu'),
+                    mUsers: document.getElementById('modal-users'),
+                    mLib: document.getElementById('modal-library')
+                };
+            },
+
+            setupRoom() {
+                const params = new URLSearchParams(window.location.search);
+                let room = params.get('room');
+                if (!room) {
+                    // Default/Offline room or Generate new? 
+                    // For V2, we default to a "Local" room, but if user wants to share, we generate ID.
+                    // Actually, to make sync work immediately, let's generate a room if none exists but 
+                    // treat it as local until shared.
+                    room = localStorage.getItem('last_room_id') || 'room_' + Date.now().toString(36);
+                    // Update URL silently
+                    try {
+                        const newUrl = window.location.pathname + '?room=' + room;
+                        window.history.replaceState(null, null, newUrl);
+                    } catch(e) {}
+                }
+                this.roomId = room;
+                localStorage.setItem('last_room_id', room);
+                
+                // MQTT Topics
+                this.topics = {
+                    data: `listolista/v2/${room}/data`,
+                    drafts: `listolista/v2/${room}/drafts`,
+                    presence: `listolista/v2/${room}/presence`
                 };
             },
 
             bind() {
-                // 1. Flujo de Entrada
+                // Inputs (Smart Commit Logic)
                 [this.dom.i1, this.dom.i2].forEach(input => {
-                    input.onkeydown = e => { if (e.key === 'Enter') this.add(input); };
-                    input.onblur = () => { setTimeout(() => this.add(input), 150); };
+                    let idleTimer;
+                    
+                    input.oninput = () => {
+                        this.broadcastDraft(true);
+                        clearTimeout(idleTimer);
+                        idleTimer = setTimeout(() => this.addItem(input), 1000); // 1s idle commit
+                    };
+                    input.onkeydown = e => { if (e.key === 'Enter') this.addItem(input); };
+                    input.onblur = () => this.addItem(input);
                 });
 
-                // 2. Edición de Título
+                // Title
                 this.dom.title.oninput = () => {
-                    this.state.title = this.dom.title.innerText;
+                    this.state.meta.title = this.dom.title.innerText;
+                    this.state.meta.timestamp = Date.now();
                     this.save();
+                    this.publishState();
                 };
-                // Prevenir Enter en el título
-                this.dom.title.onkeydown = (e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); this.dom.title.blur(); }
+                this.dom.title.onblur = () => this.saveLibrary(); // Update library on blur
+
+                // Username
+                this.dom.username.onblur = () => {
+                    this.myId = this.dom.username.innerText;
+                    localStorage.setItem('listolista_username', this.myId);
+                    this.publishPresence();
                 };
 
-                // 3. Acciones del Encabezado
-                this.dom.btnSave.onclick = () => this.actionExport();
-                this.dom.btnOpen.onclick = () => this.dom.fileInput.click();
-                this.dom.btnShare.onclick = () => this.actionShare();
-                
-                // Cambio en Input de Archivo (Abrir)
+                // Icons
+                document.getElementById('btn-menu').onclick = () => this.toggleModal('mMenu');
+                document.getElementById('btn-users').onclick = () => this.toggleModal('mUsers');
+                document.getElementById('btn-library').onclick = () => {
+                    this.renderLibrary();
+                    this.toggleModal('mLib');
+                };
+                document.getElementById('btn-share').onclick = () => {
+                    navigator.clipboard.writeText(window.location.href);
+                    this.showToast("🔗 Enlace copiado al portapapeles");
+                    this.saveLibrary(); // Sharing implicitly saves the room
+                };
+
+                // Modal Close Buttons
+                document.getElementById('close-menu').onclick = () => this.dom.mMenu.classList.add('hidden');
+                document.getElementById('close-users').onclick = () => this.dom.mUsers.classList.add('hidden');
+                document.getElementById('close-library').onclick = () => this.dom.mLib.classList.add('hidden');
+
+                // Menu Actions
+                document.getElementById('opt-save').onclick = () => this.actionExport();
+                document.getElementById('opt-open').onclick = () => this.dom.fileInput.click();
                 this.dom.fileInput.onchange = (e) => this.actionImport(e);
-
-                // 4. Menú y Modal
-                this.dom.btnMenu.onclick = () => this.dom.modal.classList.remove('hidden');
-                this.dom.closeBtn.onclick = () => this.dom.modal.classList.add('hidden');
-                this.dom.modal.onclick = (e) => {
-                    if (e.target === this.dom.modal) this.dom.modal.classList.add('hidden');
-                };
                 
-                // Opciones del Menú
-                this.dom.optClear.onclick = () => {
+                document.getElementById('opt-clear').onclick = () => {
                     this.state.items = this.state.items.filter(i => !i.done);
-                    this.save(); this.render(); this.dom.modal.classList.add('hidden');
+                    this.state.meta.timestamp = Date.now(); // Mark change
+                    this.save(); this.publishState();
+                    this.render(); this.dom.mMenu.classList.add('hidden');
                 };
-                this.dom.optWipe.onclick = () => {
-                    if(confirm("¿Estás seguro de borrar todo?")) {
-                        this.state.items = []; 
-                        this.save(); this.render(); 
-                        this.dom.modal.classList.add('hidden');
+                document.getElementById('opt-wipe').onclick = () => {
+                    if(confirm("¿Borrar todo?")) {
+                        this.state.items = [];
+                        this.state.meta.timestamp = Date.now();
+                        this.save(); this.publishState();
+                        this.render(); this.dom.mMenu.classList.add('hidden');
                     }
                 };
-                
-                // Sync Info Click
-                this.dom.btnSync.onclick = () => {
-                    const roomId = window.location.hash.replace('#', '');
-                    prompt("Tu ID de Sala (Comparte esto en la URL):", roomId);
-                };
             },
 
-            // --- CAPA DE SINCRONIZACIÓN (P2P) ---
-            initSync() {
-                // 1. Get Room ID from URL hash or generate new
-                let roomId = window.location.hash.replace('#', '');
-                if (!roomId) {
-                    roomId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-                    window.history.replaceState(null, null, '#' + roomId);
+            // --- CORE LOGIC ---
+            addItem(inputEl) {
+                const txt = inputEl.value.trim();
+                if (!txt) {
+                    this.broadcastDraft(false); // Clear typing status if empty
+                    return;
                 }
-                console.log("📡 Uniéndose a la sala:", roomId);
-
-                // 2. Connect via BitTorrent Trackers
-                try {
-                    // 'listolista_soul' is the "App ID" namespace
-                    const config = { appId: 'listolista_soul_v1' };
-                    const room = window.joinRoom(config, roomId);
-                    
-                    // 3. Create Data Channel
-                    const [sendUpdate, getUpdate] = room.makeAction('sync');
-                    this.broadcast = sendUpdate; 
-
-                    // 4. Listen for updates
-                    getUpdate((remoteState) => {
-                        console.log("📥 Recibido estado remoto");
-                        this.mergeState(remoteState);
-                    });
-
-                    // 5. Peer Join Event
-                    room.onPeerJoin(peerId => {
-                        console.log("👋 Nuevo peer conectado:", peerId);
-                        this.showToast("👋 ¡Un colaborador se ha unido!");
-                        // Send them our current state immediately so they catch up
-                        this.broadcast(this.state);
-                    });
-                    
-                    this.dom.btnSync.style.opacity = "1"; // Visual indicator active
-
-                } catch (e) {
-                    console.warn("Módulo P2P cargando o falló:", e);
-                    this.dom.btnSync.style.opacity = "0.3";
-                }
-            },
-
-            mergeState(remoteState) {
-                // Simple Merge Strategy: Union by ID + Last Write Wins on Title
-                let hasChanges = false;
-                const localMap = new Map(this.state.items.map(i => [i.id, i]));
-
-                // Update Title if remote is different (rudimentary conflict res)
-                if (remoteState.title && remoteState.title !== this.state.title) {
-                    this.state.title = remoteState.title;
-                    this.dom.title.innerText = this.state.title;
-                    hasChanges = true;
-                }
-
-                remoteState.items.forEach(rItem => {
-                    const lItem = localMap.get(rItem.id);
-                    
-                    // If item is new OR remote version is technically "newer" (in V1 we just trust remote for add/toggle)
-                    // For robust sync we'd compare timestamps, but for "Soul V1" union is safer
-                    if (!lItem) {
-                        localMap.set(rItem.id, rItem);
-                        hasChanges = true;
-                    } else {
-                        // If remote toggled it differently
-                        if (rItem.done !== lItem.done || rItem.txt !== lItem.txt) {
-                            // In a real CRDT we compare clocks. Here we let remote win to ensure propagation.
-                            localMap.set(rItem.id, rItem);
-                            hasChanges = true;
-                        }
-                    }
-                });
-
-                if (hasChanges) {
-                    this.state.items = Array.from(localMap.values());
-                    this.save(true); // Save but don't broadcast back to avoid loop
-                    this.render();
-                    this.showToast("🔄 Lista actualizada remotamente");
-                }
-            },
-
-            // --- CAPA DE PERSISTENCIA ---
-            load() {
-                const data = localStorage.getItem(this.config.storageKey);
-                if (data) {
-                    try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.items) {
-                            this.state = parsed;
-                        } else {
-                            this.state.items = parsed;
-                        }
-                    } catch (e) { console.error('Corrupción de datos', e); }
-                }
-                this.dom.title.innerText = this.state.title || "MI LISTA";
-            },
-
-            save(skipBroadcast = false) {
-                localStorage.setItem(this.config.storageKey, JSON.stringify(this.state));
-                
-                // Broadcast changes to P2P mesh
-                if (!skipBroadcast && this.broadcast) {
-                    this.broadcast(this.state);
-                }
-            },
-
-            // --- LÓGICA PRINCIPAL ---
-            add(el) {
-                const val = el.value.trim();
-                if (!val) return;
 
                 this.state.items.push({
                     id: Date.now(),
-                    txt: val,
+                    text: txt,
                     done: false,
-                    ts: Date.now(),
-                    dt: null
+                    timestamp: Date.now(),
+                    lastAuthor: this.myId
                 });
 
-                el.value = '';
-                el.focus();
+                inputEl.value = '';
+                inputEl.focus(); // Keep focus for rapid entry
+                this.broadcastDraft(false);
                 this.save();
+                this.publishState();
                 this.render();
             },
 
-            toggle(id) {
+            toggleItem(id) {
                 const item = this.state.items.find(i => i.id === id);
                 if (item) {
                     item.done = !item.done;
-                    item.dt = item.done ? Date.now() : null;
+                    item.timestamp = Date.now(); // Update timestamp for conflict res
+                    this.save();
+                    this.publishState();
+                    this.render();
+                }
+            },
+
+            deleteItem(id, e) {
+                e.stopPropagation();
+                this.state.items = this.state.items.filter(i => i.id !== id);
+                // We update meta timestamp to ensure deletion propagates? 
+                // Actually deletions in "Full State" sync just propagate by absence.
+                // But we update timestamp to ensure "Latest Wins" logic works on receiver.
+                this.state.meta.timestamp = Date.now(); 
+                this.save();
+                this.publishState();
+                this.render();
+            },
+
+            // --- MQTT SYNC ---
+            connectMQTT() {
+                this.client = mqtt.connect(this.config.broker);
+                
+                this.client.on('connect', () => {
+                    this.dom.connDot.classList.add('green');
+                    this.client.subscribe([this.topics.data, this.topics.drafts, this.topics.presence]);
+                    this.publishPresence();
+                    setInterval(() => this.publishPresence(), 5000); // Heartbeat
+                    
+                    // If we have local data, re-seed the server (Optimistic)
+                    if (this.state.items.length > 0) this.publishState();
+                });
+
+                this.client.on('message', (topic, msg) => {
+                    try {
+                        const payload = JSON.parse(msg.toString());
+                        if (topic === this.topics.data) this.handleSync(payload);
+                        else if (topic === this.topics.drafts) this.handleDrafts(payload);
+                        else if (topic === this.topics.presence) this.handlePresence(payload);
+                    } catch(e) {}
+                });
+            },
+
+            handleSync(remoteState) {
+                let changed = false;
+
+                // 1. Sync Metadata (Title)
+                if (remoteState.meta && remoteState.meta.timestamp > this.state.meta.timestamp) {
+                    this.state.meta = remoteState.meta;
+                    this.dom.title.innerText = remoteState.meta.title;
+                    changed = true;
+                }
+
+                // 2. Sync Items (Smart Merge)
+                // Since this is a list (Array), we use ID map for merging
+                const localMap = new Map(this.state.items.map(i => [i.id, i]));
+                
+                // Check remote items against local
+                remoteState.items.forEach(rItem => {
+                    const lItem = localMap.get(rItem.id);
+                    if (!lItem || rItem.timestamp > lItem.timestamp) {
+                        localMap.set(rItem.id, rItem);
+                        changed = true;
+                    }
+                });
+
+                // NOTE: Deletions are tricky in "State Dump" mode. 
+                // If I delete item A, my state doesn't have it.
+                // If remote state HAS it, merging might bring it back.
+                // For V2 Simplicity: We trust the "Newer" payload entirely if it has a newer meta timestamp?
+                // Or we stick to Union?
+                // Let's stick to Union (Additive) for safety in V2. Deletions propagate if we adopt the remote list entirely?
+                // No, that risks overwrites. 
+                // COMPROMISE: If remote meta timestamp is significantly newer (>2s), accept remote state entirely.
+                if (remoteState.meta.timestamp > this.state.meta.timestamp + 2000) {
+                    this.state = remoteState;
+                    changed = true;
+                } else {
+                    // Regular item merge
+                    if (changed) this.state.items = Array.from(localMap.values());
+                }
+
+                if (changed) {
                     this.save();
                     this.render();
                 }
             },
 
-            remove(id, e) {
-                e.stopPropagation();
-                this.state.items = this.state.items.filter(i => i.id !== id);
-                this.save();
-                this.render();
+            handleDrafts(packet) {
+                // If someone is typing (but not me), show orange background on inputs?
+                // Actually, for the main list, we don't have "Boxes" like sandbox.
+                // But we can highlight specific Items if they are being edited?
+                // Sandbox logic was for fixed inputs. For dynamic list, we skip this visual for now 
+                // to keep UI clean as requested ("List items should not look chunky").
             },
 
-            // --- ACCIONES (Guardar/Abrir/Compartir) ---
-            
-            actionExport() {
-                const dataStr = JSON.stringify(this.state, null, 2);
-                const blob = new Blob([dataStr], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = url;
-                const safeTitle = this.state.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                a.download = `${safeTitle}_backup.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                this.showToast("Lista guardada en Descargas");
+            handlePresence(packet) {
+                this.peers[packet.id] = Date.now();
+                this.renderPeers();
             },
 
-            actionImport(e) {
-                const file = e.target.files[0];
-                if (!file) return;
+            publishState() {
+                if (this.client) {
+                    this.client.publish(this.topics.data, JSON.stringify(this.state), { retain: true });
+                }
+            },
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const parsed = JSON.parse(event.target.result);
-                        if (parsed.items && Array.isArray(parsed.items)) {
-                            this.state = parsed;
-                            this.save();
-                            this.render();
-                            this.dom.title.innerText = this.state.title;
-                            this.showToast("Lista cargada correctamente");
-                        } else {
-                            alert("Formato de archivo inválido");
-                        }
-                    } catch (err) {
-                        alert("Error al leer archivo");
-                    }
+            publishPresence() {
+                if (this.client) {
+                    this.client.publish(this.topics.presence, JSON.stringify({ id: this.myId }));
+                }
+            },
+
+            broadcastDraft(isTyping) {
+                // Optional: Send typing status if we want to implement "User X is typing..." later
+            },
+
+            // --- PERSISTENCE ---
+            save() {
+                localStorage.setItem(this.config.storageKey + '_' + this.roomId, JSON.stringify(this.state));
+                this.saveLibrary();
+            },
+
+            load() {
+                const data = localStorage.getItem(this.config.storageKey + '_' + this.roomId);
+                if (data) {
+                    try { this.state = JSON.parse(data); } catch(e) {}
+                }
+                this.dom.title.innerText = this.state.meta.title;
+            },
+
+            // --- LIBRARY LOGIC ---
+            saveLibrary() {
+                let lib = JSON.parse(localStorage.getItem(this.config.libraryKey) || '{}');
+                lib[this.roomId] = {
+                    title: this.state.meta.title,
+                    lastVisited: Date.now()
                 };
-                reader.readAsText(file);
-                e.target.value = '';
+                localStorage.setItem(this.config.libraryKey, JSON.stringify(lib));
             },
 
-            actionShare() {
-                // Now copies the URL with the Room ID hash!
-                const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
-                    this.showToast("¡Enlace de sala copiado!");
+            renderLibrary() {
+                const lib = JSON.parse(localStorage.getItem(this.config.libraryKey) || '{}');
+                const list = this.dom.savedList;
+                list.innerHTML = '';
+                
+                const sorted = Object.keys(lib).sort((a,b) => lib[b].lastVisited - lib[a].lastVisited);
+                if (sorted.length === 0) list.innerHTML = '<div style="padding:10px;color:#999;">Sin listas guardadas</div>';
+
+                sorted.forEach(rid => {
+                    const item = lib[rid];
+                    const div = document.createElement('div');
+                    div.className = 'saved-room';
+                    div.innerHTML = `<strong>${item.title}</strong><span>${new Date(item.lastVisited).toLocaleDateString()}</span>`;
+                    div.onclick = () => {
+                        window.location.search = '?room=' + rid;
+                    };
+                    list.appendChild(div);
                 });
+            },
+
+            // --- RENDER ---
+            render() {
+                this.dom.pBox.innerHTML = '';
+                this.dom.cBox.innerHTML = '';
+
+                // Sort: Pending (Oldest First), Done (Newest First)
+                const pending = this.state.items.filter(i => !i.done).sort((a,b) => a.timestamp - b.timestamp);
+                const completed = this.state.items.filter(i => i.done).sort((a,b) => b.timestamp - a.timestamp); // Using timestamp as proxy for deathTime
+
+                pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
+                completed.forEach(i => this.dom.cBox.appendChild(this.createRow(i)));
+                
+                this.renderPeers();
+            },
+
+            createRow(item) {
+                const div = document.createElement('div');
+                div.className = `row ${item.done ? 'done' : ''}`;
+                div.onclick = () => this.toggleItem(item.id);
+
+                const txt = document.createElement('div');
+                txt.className = 'txt';
+                txt.textContent = item.text;
+
+                const del = document.createElement('div');
+                del.className = 'del';
+                del.innerHTML = '&times;';
+                del.onclick = (e) => this.deleteItem(item.id, e);
+
+                div.append(txt, del);
+                return div;
+            },
+
+            renderPeers() {
+                const list = this.dom.peerList;
+                list.innerHTML = '';
+                const now = Date.now();
+                
+                Object.keys(this.peers).forEach(pid => {
+                    if (now - this.peers[pid] < 10000) { // 10s timeout
+                        const div = document.createElement('div');
+                        div.className = 'user-row';
+                        div.innerHTML = `<div class="dot"></div>${pid}`;
+                        list.appendChild(div);
+                    }
+                });
+            },
+
+            // --- HELPERS ---
+            toggleModal(key) {
+                const el = this.dom[key];
+                if (el.classList.contains('hidden')) el.classList.remove('hidden');
+                else el.classList.add('hidden');
             },
 
             showToast(msg) {
@@ -503,34 +609,28 @@
                 this.dom.toast.classList.add('show');
                 setTimeout(() => this.dom.toast.classList.remove('show'), 2000);
             },
-
-            render() {
-                this.dom.pBox.innerHTML = '';
-                this.dom.cBox.innerHTML = '';
-
-                const pending = this.state.items.filter(i => !i.done).sort((a,b) => a.ts - b.ts);
-                const completed = this.state.items.filter(i => i.done).sort((a,b) => b.dt - a.dt);
-
-                pending.forEach(i => this.dom.pBox.appendChild(this.row(i)));
-                completed.forEach(i => this.dom.cBox.appendChild(this.row(i)));
+            
+            actionExport() {
+                const blob = new Blob([JSON.stringify(this.state)], {type: "application/json"});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `backup_${this.roomId}.json`;
+                a.click();
             },
-
-            row(item) {
-                const div = document.createElement('div');
-                div.className = `row ${item.done ? 'done' : ''}`;
-                div.onclick = () => this.toggle(item.id);
-
-                const txt = document.createElement('div');
-                txt.className = 'txt';
-                txt.textContent = item.txt;
-
-                const del = document.createElement('div');
-                del.className = 'del';
-                del.innerHTML = '&times;';
-                del.onclick = (e) => this.remove(item.id, e);
-
-                div.append(txt, del);
-                return div;
+            
+            actionImport(e) {
+                const file = e.target.files[0];
+                if(!file) return;
+                const r = new FileReader();
+                r.onload = (evt) => {
+                    try {
+                        this.state = JSON.parse(evt.target.result);
+                        this.save(); this.publishState(); this.render();
+                        this.dom.mMenu.classList.add('hidden');
+                    } catch(err) { alert("Error archivo"); }
+                };
+                r.readAsText(file);
+                e.target.value = '';
             }
         };
 
