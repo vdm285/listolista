@@ -105,6 +105,7 @@
             border: 2px solid var(--color-text); padding: 1.5rem;
             box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
             max-height: 80vh; overflow-y: auto;
+            position: relative;
         }
 
         .menu-opt {
@@ -114,6 +115,14 @@
         }
         .menu-opt:hover { color: #000; }
         .menu-header { margin-top:0; text-transform:uppercase; font-size:0.9rem; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px; }
+
+        /* Close X Button */
+        .close-x {
+            position: absolute; top: 10px; right: 15px;
+            font-size: 1.2rem; cursor: pointer; color: #888;
+            font-weight: bold; line-height: 1;
+        }
+        .close-x:hover { color: #000; }
 
         /* User List Styles */
         .user-row { padding: 5px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
@@ -126,11 +135,11 @@
         
         .saved-room { padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; }
         .saved-room strong { display: block; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .saved-room span { font-size: 0.7rem; color: #aaa; }
+        .saved-room span { font-size: 0.7rem; color: #aaa; display: block; }
+        .room-id-display { font-family: monospace; font-size: 0.65rem; color: #888; margin-top: 2px; }
         .saved-room:hover { background: #f9f9f9; }
         .active-room { background: #e3f2fd; }
 
-        #file-input { display: none; }
         #toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
             background: #000; color: #fff; padding: 10px 20px; border-radius: 4px;
@@ -143,21 +152,43 @@
         #conn-dot.green { background: #4caf50; }
         #conn-dot.orange { background: #ff9800; } /* Local Mode */
 
+        /* Connection Loading Screen */
+        #connect-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95); z-index: 200;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            font-size: 1.2rem; font-weight: bold; color: #555;
+        }
+        .spinner { font-size: 2rem; animation: spin 1s infinite linear; margin-bottom: 15px; }
+        @keyframes spin { from {transform:rotate(0deg);} to {transform:rotate(360deg);} }
+
+        /* Manual ID Input */
+        .manual-join { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc; display: flex; gap: 5px; }
+        .manual-join input { flex: 1; padding: 5px; font-size: 0.8rem; border: 1px solid #ccc; }
+        .manual-join button { padding: 5px 10px; cursor: pointer; background: #eee; border: 1px solid #ccc; font-size: 0.8rem; }
+
     </style>
     <!-- MQTT Library for P2P Sync -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
 
+    <div id="connect-overlay" class="hidden">
+        <div class="spinner">⏳</div>
+        <div>Conectando...</div>
+    </div>
+
     <header>
         <div id="title-container">
             <div id="title" contenteditable="true" spellcheck="false">NUEVA LISTA</div>
         </div>
         <div class="actions">
+            <div class="icon-btn" id="btn-clear" title="Limpiar completados">🧹</div>
+            <div class="icon-btn" id="btn-wipe" title="Borrar todo" style="color:#d32f2f;">🔥</div>
             <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
-            <div class="icon-btn" id="btn-users" title="Usuarios">👥<div id="conn-dot"></div></div>
+            <div class="icon-btn" id="btn-users" title="Compartido con">👥<div id="conn-dot"></div></div>
             <div class="icon-btn" id="btn-share" title="Compartir">🔗</div>
-            <div class="icon-btn" id="btn-menu" title="Menú">☰</div>
         </div>
     </header>
 
@@ -170,22 +201,11 @@
         <div id="completed-box"></div>
     </main>
 
-    <!-- MODAL: MENU -->
-    <div id="modal-menu" class="modal-overlay hidden">
-        <div class="modal-box">
-            <h3 class="menu-header">Opciones</h3>
-            <div class="menu-opt" id="opt-save">💾 Guardar Backup (.json)</div>
-            <div class="menu-opt" id="opt-open">📂 Abrir Backup</div>
-            <div class="menu-opt" id="opt-clear">🧹 Limpiar completados</div>
-            <div class="menu-opt" id="opt-wipe" style="color:#d32f2f;">🔥 Borrar todo</div>
-            <div class="menu-opt" id="close-menu" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
-        </div>
-    </div>
-
     <!-- MODAL: USERS -->
     <div id="modal-users" class="modal-overlay hidden">
         <div class="modal-box">
-            <h3 class="menu-header">Usuarios Activos</h3>
+            <div class="close-x" id="close-users">×</div>
+            <h3 class="menu-header">Compartido con</h3>
             <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
                 <label style="font-size:0.8rem; font-weight:bold; color:#666;">TU NOMBRE:</label>
                 <div id="my-username" contenteditable="true" style="font-weight:bold; border-bottom:1px dashed #999; padding:2px;">Anon</div>
@@ -194,17 +214,17 @@
                 <!-- Populated dynamically -->
                 <div style="color:#999; font-style:italic; padding:10px;">Modo Local (Offline)</div>
             </div>
-            <div class="menu-opt" id="close-users" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
         </div>
     </div>
 
     <!-- MODAL: LIBRARY (Saved Lists) -->
     <div id="modal-library" class="modal-overlay hidden">
         <div class="modal-box" style="max-width: 500px;">
-            <h3 class="menu-header">Biblioteca</h3>
+            <div class="close-x" id="close-library">×</div>
+            <!-- Header Removed as requested -->
             <div class="lib-columns">
                 <div class="lib-col">
-                    <h4>Mis Listas (Local)</h4>
+                    <h4>Mis Listas</h4>
                     <div id="list-local-container"></div>
                     <div style="margin-top:10px; text-align:center;">
                         <button id="btn-new-local" style="padding:5px 10px; font-size:0.8rem; cursor:pointer;">+ Nueva</button>
@@ -213,14 +233,17 @@
                 <div class="lib-col" style="border-left:1px solid #eee; padding-left:15px;">
                     <h4>Listas Compartidas</h4>
                     <div id="list-shared-container"></div>
+                    
+                    <!-- Manual Join -->
+                    <div class="manual-join">
+                        <input id="input-join-id" placeholder="ID de Sala..." />
+                        <button id="btn-join-manual">Entrar</button>
+                    </div>
                 </div>
             </div>
-            <div class="menu-opt" id="close-library" style="font-weight:bold; margin-top:10px; justify-content:center;">Cerrar</div>
         </div>
     </div>
 
-    <!-- Hidden Elements -->
-    <input type="file" id="file-input" accept=".json">
     <div id="toast">¡Notificación!</div>
 
     <script>
@@ -255,6 +278,7 @@
                 this.bind();
                 
                 if (this.isShared) {
+                    this.dom.overlay.classList.remove('hidden'); // Show loading
                     this.connectMQTT();
                 } else {
                     this.dom.connDot.className = 'orange'; // Local Mode
@@ -278,9 +302,9 @@
                     sharedList: document.getElementById('list-shared-container'),
                     connDot: document.getElementById('conn-dot'),
                     toast: document.getElementById('toast'),
-                    fileInput: document.getElementById('file-input'),
+                    overlay: document.getElementById('connect-overlay'),
+                    
                     // Modals
-                    mMenu: document.getElementById('modal-menu'),
                     mUsers: document.getElementById('modal-users'),
                     mLib: document.getElementById('modal-library')
                 };
@@ -344,6 +368,9 @@
                     const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
                     this.updateLibraryIndex(key, this.roomId);
                 };
+                this.dom.title.onkeydown = (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); this.dom.title.blur(); }
+                };
 
                 // Username
                 this.dom.username.onblur = () => {
@@ -351,16 +378,18 @@
                     localStorage.setItem('listolista_username', this.myId);
                     if(this.isShared) this.publishPresence();
                 };
+                this.dom.username.onkeydown = (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); this.dom.username.blur(); }
+                };
 
                 // Icons
-                document.getElementById('btn-menu').onclick = () => this.toggleModal('mMenu');
                 document.getElementById('btn-users').onclick = () => this.toggleModal('mUsers');
                 document.getElementById('btn-library').onclick = () => {
                     this.renderLibrary();
                     this.toggleModal('mLib');
                 };
                 
-                // SHARE LOGIC (The Pivot)
+                // SHARE LOGIC
                 document.getElementById('btn-share').onclick = () => {
                     if (!this.isShared) {
                         if(confirm("¿Convertir esta lista en compartida?")) {
@@ -373,9 +402,12 @@
                             
                             // 3. Switch Mode
                             try {
+                                // We construct the new URL to copy to clipboard BEFORE reloading
+                                const newUrl = window.location.origin + window.location.pathname + '?room=' + newRoomId;
+                                navigator.clipboard.writeText(newUrl);
+                                alert("Lista compartida creada. Enlace copiado al portapapeles.");
                                 window.location.search = '?room=' + newRoomId;
                             } catch (e) {
-                                // Fallback for sandbox
                                 window.location.reload();
                             }
                         }
@@ -392,28 +424,29 @@
                 };
 
                 // Modals
-                document.getElementById('close-menu').onclick = () => this.dom.mMenu.classList.add('hidden');
                 document.getElementById('close-users').onclick = () => this.dom.mUsers.classList.add('hidden');
                 document.getElementById('close-library').onclick = () => this.dom.mLib.classList.add('hidden');
 
-                // Menu Actions
-                document.getElementById('opt-save').onclick = () => this.actionExport();
-                document.getElementById('opt-open').onclick = () => this.dom.fileInput.click();
-                this.dom.fileInput.onchange = (e) => this.actionImport(e);
-                
-                document.getElementById('opt-clear').onclick = () => {
+                // Header Actions (Direct)
+                document.getElementById('btn-clear').onclick = () => {
                     this.state.items = this.state.items.filter(i => !i.done);
                     this.state.meta.timestamp = Date.now();
                     this.save(); if(this.isShared) this.publishState();
-                    this.render(); this.dom.mMenu.classList.add('hidden');
+                    this.render();
                 };
-                document.getElementById('opt-wipe').onclick = () => {
+                document.getElementById('btn-wipe').onclick = () => {
                     if(confirm("¿Borrar todo?")) {
                         this.state.items = [];
                         this.state.meta.timestamp = Date.now();
                         this.save(); if(this.isShared) this.publishState();
-                        this.render(); this.dom.mMenu.classList.add('hidden');
+                        this.render();
                     }
+                };
+
+                // Manual Join
+                document.getElementById('btn-join-manual').onclick = () => {
+                    const id = document.getElementById('input-join-id').value.trim();
+                    if(id) window.location.search = '?room=' + id;
                 };
             },
 
@@ -462,6 +495,7 @@
                 this.client = mqtt.connect(this.config.broker);
                 
                 this.client.on('connect', () => {
+                    this.dom.overlay.classList.add('hidden'); // Hide loading
                     this.dom.connDot.className = 'green';
                     this.client.subscribe([this.topics.data, this.topics.presence]);
                     this.publishPresence();
@@ -490,22 +524,22 @@
                     changed = true;
                 }
 
-                // 2. Sync Items (Smart Merge)
-                const localMap = new Map(this.state.items.map(i => [i.id, i]));
-                
-                remoteState.items.forEach(rItem => {
-                    const lItem = localMap.get(rItem.id);
-                    if (!lItem || rItem.timestamp > lItem.timestamp) {
-                        localMap.set(rItem.id, rItem);
-                        changed = true;
-                    }
-                });
-
-                // Force Update Logic
+                // 2. Sync Items (DELETION FIX: Trust Newer State)
+                // If remote meta timestamp is significantly newer (>2s), 
+                // we assume it represents the authoritative state including deletions.
                 if (remoteState.meta.timestamp > this.state.meta.timestamp + 2000) {
                     this.state = remoteState;
                     changed = true;
                 } else {
+                    // Merging logic for updates/additions if timestamps are close
+                    const localMap = new Map(this.state.items.map(i => [i.id, i]));
+                    remoteState.items.forEach(rItem => {
+                        const lItem = localMap.get(rItem.id);
+                        if (!lItem || rItem.timestamp > lItem.timestamp) {
+                            localMap.set(rItem.id, rItem);
+                            changed = true;
+                        }
+                    });
                     if (changed) this.state.items = Array.from(localMap.values());
                 }
 
@@ -570,7 +604,12 @@
                         const meta = index[rid];
                         const div = document.createElement('div');
                         div.className = `saved-room ${rid === this.roomId ? 'active-room' : ''}`;
-                        div.innerHTML = `<strong>${meta.title}</strong><span>Updated: ${new Date(meta.lastVisited).toLocaleDateString()}</span>`;
+                        
+                        let html = `<strong>${meta.title}</strong>`;
+                        if(isSharedCol) html += `<div class="room-id-display">ID: ${rid}</div>`;
+                        html += `<span>${new Date(meta.lastVisited).toLocaleDateString()}</span>`;
+                        
+                        div.innerHTML = html;
                         div.onclick = () => {
                             // Determine query param based on column
                             const param = isSharedCol ? 'room' : 'local';
@@ -649,31 +688,6 @@
                 this.dom.toast.textContent = msg;
                 this.dom.toast.classList.add('show');
                 setTimeout(() => this.dom.toast.classList.remove('show'), 2000);
-            },
-            
-            actionExport() {
-                const blob = new Blob([JSON.stringify(this.state)], {type: "application/json"});
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `backup_${this.state.meta.title}.json`;
-                a.click();
-            },
-            
-            actionImport(e) {
-                const file = e.target.files[0];
-                if(!file) return;
-                const r = new FileReader();
-                r.onload = (evt) => {
-                    try {
-                        this.state = JSON.parse(evt.target.result);
-                        this.save(); 
-                        if(this.isShared) this.publishState(); 
-                        this.render();
-                        this.dom.mMenu.classList.add('hidden');
-                    } catch(err) { alert("Error archivo"); }
-                };
-                r.readAsText(file);
-                e.target.value = '';
             }
         };
 
