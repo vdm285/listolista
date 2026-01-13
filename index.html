@@ -52,9 +52,16 @@
 
         /* ACCIONES DEL ENCABEZADO */
         .actions { display: flex; align-items: center; gap: 15px; }
-        .icon-btn { cursor: pointer; font-size: 1.2rem; line-height: 1; user-select: none; }
+        .icon-btn { cursor: pointer; font-size: 1.2rem; line-height: 1; user-select: none; position: relative; }
         .icon-btn:hover { opacity: 0.7; }
         .icon-btn:active { transform: scale(0.95); }
+        
+        /* SORT INDICATOR */
+        .sort-badge { 
+            position: absolute; bottom: -2px; right: -2px; 
+            font-size: 0.6rem; font-weight: bold; background: #eee; 
+            padding: 0 2px; border-radius: 3px; 
+        }
 
         /* --- ÁREA DE VISUALIZACIÓN --- */
         main {
@@ -181,8 +188,12 @@
             <div id="title" contenteditable="true" spellcheck="false">NUEVA LISTA</div>
         </div>
         <div class="actions">
+            <div class="icon-btn" id="btn-sort" title="Ordenar">🔤<span class="sort-badge" id="sort-badge"></span></div>
+            <div class="icon-btn" id="btn-aisle" title="Pasillos (Pronto)" style="opacity:0.3; cursor:default;">🏪</div>
+            
             <div class="icon-btn" id="btn-clear" title="Limpiar completados">🧹</div>
             <div class="icon-btn" id="btn-wipe" title="Borrar todo" style="color:#d32f2f;">🔥</div>
+            
             <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
             <div class="icon-btn" id="btn-users" title="Compartido con">👥<div id="conn-dot"></div></div>
             <div class="icon-btn" id="btn-share" title="Compartir">🔗</div>
@@ -248,7 +259,7 @@
             },
             
             state: { 
-                items: [], // { id, text, done, deleted, timestamp, lastAuthor }
+                items: [], 
                 meta: { title: "NUEVA LISTA", timestamp: 0, lastAuthor: "" }
             },
             
@@ -257,6 +268,7 @@
             client: null,
             roomId: null,
             isShared: false,
+            sortMode: 'time', // time | asc | desc
 
             init() {
                 this.cacheDOM();
@@ -290,6 +302,7 @@
                     connDot: document.getElementById('conn-dot'),
                     toast: document.getElementById('toast'),
                     overlay: document.getElementById('connect-overlay'),
+                    sortBadge: document.getElementById('sort-badge'),
                     mUsers: document.getElementById('modal-users'),
                     mLib: document.getElementById('modal-library')
                 };
@@ -333,11 +346,12 @@
                 this.dom.title.oninput = () => {
                     this.state.meta.title = this.dom.title.innerText;
                     this.state.meta.timestamp = Date.now();
-                    this.save();
-                    // Update index continuously so library is fresh
+                    
+                    // CRITICAL FIX: Save index immediately on input so library is always fresh
                     const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
                     this.updateLibraryIndex(key, this.roomId);
                     
+                    this.save();
                     if(this.isShared) this.publishState();
                 };
                 
@@ -379,6 +393,14 @@
                     }
                 };
 
+                // SORTING LOGIC
+                document.getElementById('btn-sort').onclick = () => {
+                    if (this.sortMode === 'time') this.sortMode = 'asc';
+                    else if (this.sortMode === 'asc') this.sortMode = 'desc';
+                    else this.sortMode = 'time';
+                    this.render();
+                };
+
                 document.getElementById('btn-new-local').onclick = () => {
                     const newId = 'local_' + Date.now();
                     window.location.search = '?local=' + newId;
@@ -387,7 +409,6 @@
                 document.getElementById('close-users').onclick = () => this.dom.mUsers.classList.add('hidden');
                 document.getElementById('close-library').onclick = () => this.dom.mLib.classList.add('hidden');
 
-                // CORRECTED: Soft Delete for Bulk Actions
                 document.getElementById('btn-clear').onclick = () => {
                     let changed = false;
                     this.state.items.forEach(i => {
@@ -465,7 +486,6 @@
                 e.stopPropagation();
                 const item = this.state.items.find(i => i.id === id);
                 if (item) {
-                    // CRITICAL FIX: Soft Delete + Timestamp Push
                     item.deleted = true;
                     item.timestamp = Date.now(); 
                     this.state.meta.timestamp = Date.now();
@@ -503,6 +523,11 @@
                 if (remoteState.meta && remoteState.meta.timestamp > this.state.meta.timestamp) {
                     this.state.meta = remoteState.meta;
                     this.dom.title.innerText = remoteState.meta.title;
+                    
+                    // Update Library Title Index if synced
+                    const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
+                    this.updateLibraryIndex(key, this.roomId);
+                    
                     changed = true;
                 }
 
@@ -510,16 +535,12 @@
                 
                 remoteState.items.forEach(rItem => {
                     const lItem = localMap.get(rItem.id);
-                    // MERGE LOGIC:
-                    // 1. If we don't have it, take it.
-                    // 2. If we have it, but remote is newer, take it.
                     if (!lItem || rItem.timestamp > lItem.timestamp) {
                         localMap.set(rItem.id, rItem);
                         changed = true;
                     }
                 });
 
-                // Optimization: If changed, rebuild array from map values
                 if (changed) {
                     this.state.items = Array.from(localMap.values());
                     this.save();
@@ -578,12 +599,8 @@
                         const meta = index[rid];
                         const div = document.createElement('div');
                         div.className = `saved-room ${rid === this.roomId ? 'active-room' : ''}`;
-                        
-                        let html = `<strong>${meta.title}</strong>`;
-                        if(isSharedCol) html += `<div class="room-id-display">ID: ${rid}</div>`;
-                        html += `<span>${new Date(meta.lastVisited).toLocaleDateString()}</span>`;
-                        
-                        div.innerHTML = html;
+                        // REMOVED: Timestamp and ID, only Title shown
+                        div.innerHTML = `<strong>${meta.title}</strong>`;
                         div.onclick = () => {
                             const param = isSharedCol ? 'room' : 'local';
                             window.location.search = `?${param}=${rid}`;
@@ -600,9 +617,21 @@
                 this.dom.pBox.innerHTML = '';
                 this.dom.cBox.innerHTML = '';
 
-                // FILTER: Only show items that are NOT deleted
-                const pending = this.state.items.filter(i => !i.done && !i.deleted).sort((a,b) => a.timestamp - b.timestamp);
+                let pending = this.state.items.filter(i => !i.done && !i.deleted);
                 const completed = this.state.items.filter(i => i.done && !i.deleted).sort((a,b) => b.timestamp - a.timestamp);
+
+                // SORTING LOGIC
+                if (this.sortMode === 'asc') {
+                    pending.sort((a,b) => a.text.localeCompare(b.text));
+                    this.dom.sortBadge.innerText = "A-Z";
+                } else if (this.sortMode === 'desc') {
+                    pending.sort((a,b) => b.text.localeCompare(a.text));
+                    this.dom.sortBadge.innerText = "Z-A";
+                } else {
+                    // Default: Time
+                    pending.sort((a,b) => a.timestamp - b.timestamp);
+                    this.dom.sortBadge.innerText = "";
+                }
 
                 pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
                 completed.forEach(i => this.dom.cBox.appendChild(this.createRow(i)));
@@ -667,3 +696,22 @@
     </script>
 </body>
 </html>
+```
+
+### Brainstorm: "AI-Free Categorization"
+
+Now, let's tackle your challenge: **How to sort items into Supermarket Aisles (Produce, Dairy, etc.) without hitting an AI API.**
+
+This is a classic "Client-Side Intelligence" problem.
+
+#### The "Dictionary" Approach (My Recommendation)
+We can build a lightweight, specialized dictionary directly into the JavaScript code.
+* **Mechanism:** A JSON object mapping common keywords to categories.
+* **Example:**
+    ```javascript
+    const AISLES = {
+      "manzana": "🍎 Frutas",
+      "leche": "🥛 Lácteos",
+      "pan": "🍞 Panadería",
+      "shampoo": "🛁 Higiene"
+    };
