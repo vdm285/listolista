@@ -198,12 +198,10 @@
             <div id="title" contenteditable="true" spellcheck="false">NUEVA LISTA</div>
         </div>
         <div class="actions">
-            <div class="icon-btn" id="btn-sort" title="Ordenar">🔤<span class="sort-badge" id="sort-badge"></span></div>
-            <div class="icon-btn" id="btn-aisle" title="Ordenar por Pasillos">🏪<span class="sort-badge" id="aisle-badge"></span></div>
-            
             <div class="icon-btn" id="btn-clear" title="Limpiar completados">☑️</div>
             <div class="icon-btn" id="btn-wipe" title="Borrar todo" style="color:#d32f2f;">🚮</div>
-            
+            <div class="icon-btn" id="btn-sort" title="Ordenar">🔤<span class="sort-badge" id="sort-badge"></span></div>
+            <div class="icon-btn" id="btn-aisle" title="Ordenar por Pasillos">🏪<span class="sort-badge" id="aisle-badge"></span></div>
             <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
             <div class="icon-btn" id="btn-users" title="Compartido con">👥<div id="conn-dot"></div></div>
             <div class="icon-btn" id="btn-share" title="Compartir">🔗</div>
@@ -489,15 +487,16 @@
             },
 
             categorize(text) {
-                // 1. Direct Lookup
                 const norm = this.normalize(text);
+                
+                // 1. Exact Match
                 if (SUPERMARKET_DICT[norm]) return SUPERMARKET_DICT[norm];
 
-                // 2. Fuzzy Containment (e.g. "manzanas rojas" -> "manzana")
-                // Check if any key in dictionary is part of the input
-                for (let key in SUPERMARKET_DICT) {
-                    // Start checking longer keys to avoid matching "pan" in "pantalla" incorrectly (heuristic)
-                    // For simplicity, just check includes
+                // 2. Prioritize longer key matches to handle "jugo de manzana" vs "manzana"
+                // Extract keys and sort by length descending
+                const keys = Object.keys(SUPERMARKET_DICT).sort((a, b) => b.length - a.length);
+                
+                for (const key of keys) {
                     if (norm.includes(key)) return SUPERMARKET_DICT[key];
                 }
 
