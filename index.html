@@ -78,7 +78,7 @@
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 1rem; cursor: pointer; user-select: none; transition: background 0.2s;
         }
-        .txt { flex-grow: 1; font-size: 1.1rem; padding: 12px 0; pointer-events: none; } /* Text not directly editable yet */
+        .txt { flex-grow: 1; font-size: 1.1rem; padding: 12px 0; pointer-events: none; }
         
         .del {
             padding: 10px 0 10px 20px; color: var(--color-text);
@@ -128,7 +128,7 @@
         .user-row { padding: 5px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
         .dot { width: 8px; height: 8px; background: #4caf50; border-radius: 50%; }
         
-        /* Saved Rooms Styles (Two Column) */
+        /* Saved Rooms Styles */
         .lib-columns { display: flex; gap: 15px; }
         .lib-col { flex: 1; }
         .lib-col h4 { font-size: 0.8rem; text-transform: uppercase; color: #888; border-bottom: 1px solid #eee; margin-bottom: 5px; }
@@ -147,12 +147,11 @@
         }
         #toast.show { opacity: 1; }
         
-        /* Connection Status Dot */
+        /* Connection Status */
         #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; position: absolute; top: 12px; right: 12px; border: 1px solid white; }
         #conn-dot.green { background: #4caf50; }
-        #conn-dot.orange { background: #ff9800; } /* Local Mode */
+        #conn-dot.orange { background: #ff9800; } 
 
-        /* Connection Loading Screen */
         #connect-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(255,255,255,0.95); z-index: 200;
@@ -163,13 +162,11 @@
         .spinner { font-size: 2rem; animation: spin 1s infinite linear; margin-bottom: 15px; }
         @keyframes spin { from {transform:rotate(0deg);} to {transform:rotate(360deg);} }
 
-        /* Manual ID Input */
         .manual-join { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc; display: flex; gap: 5px; }
         .manual-join input { flex: 1; padding: 5px; font-size: 0.8rem; border: 1px solid #ccc; }
         .manual-join button { padding: 5px 10px; cursor: pointer; background: #eee; border: 1px solid #ccc; font-size: 0.8rem; }
 
     </style>
-    <!-- MQTT Library for P2P Sync -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
@@ -193,7 +190,6 @@
     </header>
 
     <main id="viewport">
-        <!-- Input Stream (Purely Local) -->
         <div class="slot"><input id="i1" placeholder="Escribe aquí..." autocomplete="off"></div>
         <div class="slot"><input id="i2" placeholder="Escribe aquí..." autocomplete="off"></div>
         
@@ -211,17 +207,15 @@
                 <div id="my-username" contenteditable="true" style="font-weight:bold; border-bottom:1px dashed #999; padding:2px;">Anon</div>
             </div>
             <div id="peer-list">
-                <!-- Populated dynamically -->
                 <div style="color:#999; font-style:italic; padding:10px;">Modo Local (Offline)</div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL: LIBRARY (Saved Lists) -->
+    <!-- MODAL: LIBRARY -->
     <div id="modal-library" class="modal-overlay hidden">
         <div class="modal-box" style="max-width: 500px;">
             <div class="close-x" id="close-library">×</div>
-            <!-- Header Removed as requested -->
             <div class="lib-columns">
                 <div class="lib-col">
                     <h4>Mis Listas</h4>
@@ -233,8 +227,6 @@
                 <div class="lib-col" style="border-left:1px solid #eee; padding-left:15px;">
                     <h4>Listas Compartidas</h4>
                     <div id="list-shared-container"></div>
-                    
-                    <!-- Manual Join -->
                     <div class="manual-join">
                         <input id="input-join-id" placeholder="ID de Sala..." />
                         <button id="btn-join-manual">Entrar</button>
@@ -248,40 +240,35 @@
 
     <script>
         const App = {
-            // --- CONFIGURATION ---
             config: { 
                 broker: 'wss://broker.hivemq.com:8884/mqtt',
-                // Keys for indexes
                 indexLocal: 'listolista_index_local',
                 indexShared: 'listolista_index_shared',
-                // Prefix for data storage
                 storePrefix: 'listolista_data_'
             },
             
-            // --- STATE ---
             state: { 
-                items: [], // Array of { id, text, done, deleted, timestamp, lastAuthor }
+                items: [], // { id, text, done, deleted, timestamp, lastAuthor }
                 meta: { title: "NUEVA LISTA", timestamp: 0, lastAuthor: "" }
             },
             
-            // --- RUNTIME ---
             myId: localStorage.getItem('listolista_username') || 'User_' + Math.floor(Math.random() * 1000),
             peers: {},
             client: null,
-            roomId: null, // If null, we are in Local Mode
+            roomId: null,
             isShared: false,
 
             init() {
                 this.cacheDOM();
-                this.detectMode(); // Check URL for Room ID
+                this.detectMode();
                 this.load(); 
                 this.bind();
                 
                 if (this.isShared) {
-                    this.dom.overlay.classList.remove('hidden'); // Show loading
+                    this.dom.overlay.classList.remove('hidden'); 
                     this.connectMQTT();
                 } else {
-                    this.dom.connDot.className = 'orange'; // Local Mode
+                    this.dom.connDot.className = 'orange'; 
                 }
                 
                 this.render();
@@ -303,8 +290,6 @@
                     connDot: document.getElementById('conn-dot'),
                     toast: document.getElementById('toast'),
                     overlay: document.getElementById('connect-overlay'),
-                    
-                    // Modals
                     mUsers: document.getElementById('modal-users'),
                     mLib: document.getElementById('modal-library')
                 };
@@ -316,63 +301,50 @@
                 const localId = params.get('local');
 
                 if (room) {
-                    // SHARED MODE
                     this.isShared = true;
                     this.roomId = room;
                     this.topics = {
                         data: `listolista/v2/${room}/data`,
                         presence: `listolista/v2/${room}/presence`
                     };
-                    // Save to Shared Index
                     this.updateLibraryIndex(this.config.indexShared, room);
                 } else {
-                    // LOCAL MODE
                     this.isShared = false;
-                    // If no ID provided, generate one for this session (ephemeral until saved) or load last
                     this.roomId = localId || localStorage.getItem('last_local_id') || 'local_' + Date.now();
                     
-                    // If it's a new local ID, update URL silently to keep state refresh-proof
                     if (!localId) {
                         try {
                             const newUrl = window.location.pathname + '?local=' + this.roomId;
                             window.history.replaceState(null, null, newUrl);
-                        } catch (e) {
-                            console.warn("History update failed (likely sandbox):", e);
-                        }
+                        } catch (e) { console.warn("Hist. update failed", e); }
                     }
                     
                     localStorage.setItem('last_local_id', this.roomId);
-                    // Save to Local Index
                     this.updateLibraryIndex(this.config.indexLocal, this.roomId);
                 }
             },
 
             bind() {
-                // Inputs (Purely Local - No Drafting Sync)
                 [this.dom.i1, this.dom.i2].forEach(input => {
                     input.onkeydown = e => { if (e.key === 'Enter') this.addItem(input); };
-                    input.onblur = () => { 
-                        if(input.value.trim()) this.addItem(input); 
-                    };
+                    input.onblur = () => { if(input.value.trim()) this.addItem(input); };
                 });
 
-                // Title
                 this.dom.title.oninput = () => {
                     this.state.meta.title = this.dom.title.innerText;
                     this.state.meta.timestamp = Date.now();
                     this.save();
-                    if(this.isShared) this.publishState();
-                };
-                this.dom.title.onblur = () => {
-                    // Update index title on blur
+                    // Update index continuously so library is fresh
                     const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
                     this.updateLibraryIndex(key, this.roomId);
+                    
+                    if(this.isShared) this.publishState();
                 };
+                
                 this.dom.title.onkeydown = (e) => {
                     if (e.key === 'Enter') { e.preventDefault(); this.dom.title.blur(); }
                 };
 
-                // Username
                 this.dom.username.onblur = () => {
                     this.myId = this.dom.username.innerText;
                     localStorage.setItem('listolista_username', this.myId);
@@ -382,37 +354,26 @@
                     if (e.key === 'Enter') { e.preventDefault(); this.dom.username.blur(); }
                 };
 
-                // Icons
                 document.getElementById('btn-users').onclick = () => this.toggleModal('mUsers');
                 document.getElementById('btn-library').onclick = () => {
                     this.renderLibrary();
                     this.toggleModal('mLib');
                 };
                 
-                // SHARE LOGIC
                 document.getElementById('btn-share').onclick = () => {
                     if (!this.isShared) {
                         if(confirm("¿Convertir esta lista en compartida?")) {
-                            // 1. Generate new Room ID
                             const newRoomId = 'room_' + Date.now().toString(36);
-                            
-                            // 2. Migrate Data (Save to new key)
                             const currentData = JSON.stringify(this.state);
                             localStorage.setItem(this.config.storePrefix + newRoomId, currentData);
-                            
-                            // 3. Switch Mode
                             try {
-                                // We construct the new URL to copy to clipboard BEFORE reloading
                                 const newUrl = window.location.origin + window.location.pathname + '?room=' + newRoomId;
                                 navigator.clipboard.writeText(newUrl);
                                 alert("Lista compartida creada. Enlace copiado al portapapeles.");
                                 window.location.search = '?room=' + newRoomId;
-                            } catch (e) {
-                                window.location.reload();
-                            }
+                            } catch (e) { window.location.reload(); }
                         }
                     } else {
-                        // Already shared, just copy link
                         navigator.clipboard.writeText(window.location.href);
                         this.showToast("🔗 Enlace de sala copiado");
                     }
@@ -423,13 +384,11 @@
                     window.location.search = '?local=' + newId;
                 };
 
-                // Modals
                 document.getElementById('close-users').onclick = () => this.dom.mUsers.classList.add('hidden');
                 document.getElementById('close-library').onclick = () => this.dom.mLib.classList.add('hidden');
 
-                // Header Actions (Direct)
+                // CORRECTED: Soft Delete for Bulk Actions
                 document.getElementById('btn-clear').onclick = () => {
-                    // Mark as deleted instead of filter
                     let changed = false;
                     this.state.items.forEach(i => {
                         if (i.done && !i.deleted) {
@@ -445,28 +404,32 @@
                         this.render();
                     }
                 };
+                
                 document.getElementById('btn-wipe').onclick = () => {
                     if(confirm("¿Borrar todo?")) {
-                        // Soft delete all items for sync propagation
+                        let changed = false;
                         this.state.items.forEach(i => {
-                            i.deleted = true;
-                            i.timestamp = Date.now();
+                            if (!i.deleted) {
+                                i.deleted = true;
+                                i.timestamp = Date.now();
+                                changed = true;
+                            }
                         });
-                        this.state.meta.timestamp = Date.now();
-                        this.save(); 
-                        if(this.isShared) this.publishState();
-                        this.render();
+                        if (changed) {
+                            this.state.meta.timestamp = Date.now();
+                            this.save(); 
+                            if(this.isShared) this.publishState();
+                            this.render();
+                        }
                     }
                 };
 
-                // Manual Join
                 document.getElementById('btn-join-manual').onclick = () => {
                     const id = document.getElementById('input-join-id').value.trim();
                     if(id) window.location.search = '?room=' + id;
                 };
             },
 
-            // --- CORE LOGIC ---
             addItem(inputEl) {
                 const txt = inputEl.value.trim();
                 if (!txt) return;
@@ -475,7 +438,7 @@
                     id: Date.now(),
                     text: txt,
                     done: false,
-                    deleted: false, // New Field for Tombstone
+                    deleted: false,
                     timestamp: Date.now(),
                     lastAuthor: this.myId
                 });
@@ -502,28 +465,26 @@
                 e.stopPropagation();
                 const item = this.state.items.find(i => i.id === id);
                 if (item) {
-                    // Soft Delete (Tombstone)
+                    // CRITICAL FIX: Soft Delete + Timestamp Push
                     item.deleted = true;
-                    item.timestamp = Date.now();
-                    this.state.meta.timestamp = Date.now(); 
+                    item.timestamp = Date.now(); 
+                    this.state.meta.timestamp = Date.now();
                     this.save();
                     if(this.isShared) this.publishState();
                     this.render();
                 }
             },
 
-            // --- MQTT SYNC (Only for Shared Mode) ---
             connectMQTT() {
                 this.client = mqtt.connect(this.config.broker);
                 
                 this.client.on('connect', () => {
-                    this.dom.overlay.classList.add('hidden'); // Hide loading
+                    this.dom.overlay.classList.add('hidden'); 
                     this.dom.connDot.className = 'green';
                     this.client.subscribe([this.topics.data, this.topics.presence]);
                     this.publishPresence();
                     setInterval(() => this.publishPresence(), 5000); 
                     
-                    // Optimistic Reseed
                     if (this.state.items.length > 0) this.publishState();
                 });
 
@@ -539,25 +500,26 @@
             handleSync(remoteState) {
                 let changed = false;
 
-                // 1. Sync Title
                 if (remoteState.meta && remoteState.meta.timestamp > this.state.meta.timestamp) {
                     this.state.meta = remoteState.meta;
                     this.dom.title.innerText = remoteState.meta.title;
                     changed = true;
                 }
 
-                // 2. Sync Items (Smart Merge with Tombstones)
                 const localMap = new Map(this.state.items.map(i => [i.id, i]));
                 
                 remoteState.items.forEach(rItem => {
                     const lItem = localMap.get(rItem.id);
-                    // Update if remote item is newer OR we don't have it (and it's not a ghost of something we deleted earlier? No, timestamps handle this)
+                    // MERGE LOGIC:
+                    // 1. If we don't have it, take it.
+                    // 2. If we have it, but remote is newer, take it.
                     if (!lItem || rItem.timestamp > lItem.timestamp) {
                         localMap.set(rItem.id, rItem);
                         changed = true;
                     }
                 });
 
+                // Optimization: If changed, rebuild array from map values
                 if (changed) {
                     this.state.items = Array.from(localMap.values());
                     this.save();
@@ -582,12 +544,8 @@
                 }
             },
 
-            // --- PERSISTENCE & LIBRARY ---
             save() {
                 localStorage.setItem(this.config.storePrefix + this.roomId, JSON.stringify(this.state));
-                // Update Last Visited in Index
-                const indexKey = this.isShared ? this.config.indexShared : this.config.indexLocal;
-                this.updateLibraryIndex(indexKey, this.roomId);
             },
 
             load() {
@@ -627,7 +585,6 @@
                         
                         div.innerHTML = html;
                         div.onclick = () => {
-                            // Determine query param based on column
                             const param = isSharedCol ? 'room' : 'local';
                             window.location.search = `?${param}=${rid}`;
                         };
@@ -639,12 +596,11 @@
                 renderCol(this.config.indexShared, 'list-shared-container', true);
             },
 
-            // --- RENDER ---
             render() {
                 this.dom.pBox.innerHTML = '';
                 this.dom.cBox.innerHTML = '';
 
-                // Filter out deleted items (Tombstones)
+                // FILTER: Only show items that are NOT deleted
                 const pending = this.state.items.filter(i => !i.done && !i.deleted).sort((a,b) => a.timestamp - b.timestamp);
                 const completed = this.state.items.filter(i => i.done && !i.deleted).sort((a,b) => b.timestamp - a.timestamp);
 
@@ -694,7 +650,6 @@
                 });
             },
 
-            // --- HELPERS ---
             toggleModal(key) {
                 const el = this.dom[key];
                 if (el.classList.contains('hidden')) el.classList.remove('hidden');
