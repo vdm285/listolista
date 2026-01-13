@@ -85,11 +85,21 @@
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 1rem; cursor: pointer; user-select: none; transition: background 0.2s;
         }
-        .txt { flex-grow: 1; font-size: 1.1rem; padding: 12px 0; pointer-events: none; }
+        
+        .item-content { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; padding: 8px 0; pointer-events: none; }
+        .txt { font-size: 1.1rem; line-height: 1.2; }
+        .cat-tag { font-size: 0.75rem; color: #666; margin-top: 2px; }
         
         .del {
             padding: 10px 0 10px 20px; color: var(--color-text);
             font-weight: bold; font-size: 1.4rem;
+        }
+
+        /* SECTION HEADERS (For Aisle Sort) */
+        .aisle-header {
+            background: #f0f0f0; padding: 5px 1rem; font-size: 0.8rem; 
+            font-weight: bold; color: #555; text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
         }
 
         /* ESTADOS DE ÍTEM */
@@ -189,10 +199,10 @@
         </div>
         <div class="actions">
             <div class="icon-btn" id="btn-sort" title="Ordenar">🔤<span class="sort-badge" id="sort-badge"></span></div>
-            <div class="icon-btn" id="btn-aisle" title="Pasillos (Pronto)" style="opacity:0.3; cursor:default;">🏪</div>
+            <div class="icon-btn" id="btn-aisle" title="Ordenar por Pasillos">🏪<span class="sort-badge" id="aisle-badge"></span></div>
             
-            <div class="icon-btn" id="btn-clear" title="Limpiar completados">🧹</div>
-            <div class="icon-btn" id="btn-wipe" title="Borrar todo" style="color:#d32f2f;">🔥</div>
+            <div class="icon-btn" id="btn-clear" title="Limpiar completados">☑️</div>
+            <div class="icon-btn" id="btn-wipe" title="Borrar todo" style="color:#d32f2f;">🚮</div>
             
             <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
             <div class="icon-btn" id="btn-users" title="Compartido con">👥<div id="conn-dot"></div></div>
@@ -250,6 +260,23 @@
     <div id="toast">¡Notificación!</div>
 
     <script>
+        // --- BRAIN: SUPERMARKET DICTIONARY ---
+        // Normalized keys (no accents, lowercase) -> Category Name
+        const SUPERMARKET_DICT = {
+            "manzana": "Frutas y Verduras 🥦", "pera": "Frutas y Verduras 🥦", "platano": "Frutas y Verduras 🥦", "naranja": "Frutas y Verduras 🥦", "limon": "Frutas y Verduras 🥦", "fresa": "Frutas y Verduras 🥦", "sandia": "Frutas y Verduras 🥦", "melon": "Frutas y Verduras 🥦", "mango": "Frutas y Verduras 🥦", "guayaba": "Frutas y Verduras 🥦", "papaya": "Frutas y Verduras 🥦", "pina": "Frutas y Verduras 🥦", "uvas": "Frutas y Verduras 🥦", "aguacate": "Frutas y Verduras 🥦", "jitomate": "Frutas y Verduras 🥦", "tomate": "Frutas y Verduras 🥦", "lechuga": "Frutas y Verduras 🥦", "cebolla": "Frutas y Verduras 🥦", "ajo": "Frutas y Verduras 🥦", "zanahoria": "Frutas y Verduras 🥦", "papa": "Frutas y Verduras 🥦", "calabaza": "Frutas y Verduras 🥦", "chayote": "Frutas y Verduras 🥦", "nopales": "Frutas y Verduras 🥦", "espinaca": "Frutas y Verduras 🥦", "brocoli": "Frutas y Verduras 🥦", "coliflor": "Frutas y Verduras 🥦", "pepino": "Frutas y Verduras 🥦", "elote": "Frutas y Verduras 🥦", "ejote": "Frutas y Verduras 🥦", "chile": "Frutas y Verduras 🥦", "cilantro": "Frutas y Verduras 🥦", "perejil": "Frutas y Verduras 🥦", "betabel": "Frutas y Verduras 🥦", "apio": "Frutas y Verduras 🥦", "hongos": "Frutas y Verduras 🥦", "champiñones": "Frutas y Verduras 🥦",
+            "carne": "Carnes y Pescados 🥩", "res": "Carnes y Pescados 🥩", "bistec": "Carnes y Pescados 🥩", "molida": "Carnes y Pescados 🥩", "pollo": "Carnes y Pescados 🥩", "pechuga": "Carnes y Pescados 🥩", "pierna": "Carnes y Pescados 🥩", "muslo": "Carnes y Pescados 🥩", "milanesa": "Carnes y Pescados 🥩", "jamon": "Carnes y Pescados 🥩", "salchicha": "Carnes y Pescados 🥩", "chorizo": "Carnes y Pescados 🥩", "tocino": "Carnes y Pescados 🥩", "pescado": "Carnes y Pescados 🥩", "atun": "Carnes y Pescados 🥩", "camaron": "Carnes y Pescados 🥩", "filete": "Carnes y Pescados 🥩", "cerdo": "Carnes y Pescados 🥩", "chuleta": "Carnes y Pescados 🥩",
+            "leche": "Lácteos y Huevos 🧀", "huevo": "Lácteos y Huevos 🧀", "huevos": "Lácteos y Huevos 🧀", "yogurt": "Lácteos y Huevos 🧀", "yogur": "Lácteos y Huevos 🧀", "queso": "Lácteos y Huevos 🧀", "panela": "Lácteos y Huevos 🧀", "manchego": "Lácteos y Huevos 🧀", "oaxaca": "Lácteos y Huevos 🧀", "crema": "Lácteos y Huevos 🧀", "mantequilla": "Lácteos y Huevos 🧀", "margarina": "Lácteos y Huevos 🧀",
+            "pan": "Panadería y Tortillas 🍞", "tortillas": "Panadería y Tortillas 🍞", "bolillo": "Panadería y Tortillas 🍞", "pan dulce": "Panadería y Tortillas 🍞", "pan de caja": "Panadería y Tortillas 🍞", "bimbo": "Panadería y Tortillas 🍞", "tostadas": "Panadería y Tortillas 🍞", "galletas": "Panadería y Tortillas 🍞",
+            "arroz": "Despensa y Abarrotes 🥫", "frijol": "Despensa y Abarrotes 🥫", "frijoles": "Despensa y Abarrotes 🥫", "pasta": "Despensa y Abarrotes 🥫", "sopa": "Despensa y Abarrotes 🥫", "aceite": "Despensa y Abarrotes 🥫", "azucar": "Despensa y Abarrotes 🥫", "sal": "Despensa y Abarrotes 🥫", "harina": "Despensa y Abarrotes 🥫", "cafe": "Despensa y Abarrotes 🥫", "te": "Despensa y Abarrotes 🥫", "cereal": "Despensa y Abarrotes 🥫", "avena": "Despensa y Abarrotes 🥫", "atun en lata": "Despensa y Abarrotes 🥫", "sardinas": "Despensa y Abarrotes 🥫", "mayonesa": "Despensa y Abarrotes 🥫", "catsup": "Despensa y Abarrotes 🥫", "mostaza": "Despensa y Abarrotes 🥫", "salsa": "Despensa y Abarrotes 🥫", "pure de tomate": "Despensa y Abarrotes 🥫", "chiles en lata": "Despensa y Abarrotes 🥫", "consome": "Despensa y Abarrotes 🥫",
+            "refresco": "Bebidas 🥤", "coca": "Bebidas 🥤", "agua": "Bebidas 🥤", "jugo": "Bebidas 🥤", "cerveza": "Bebidas 🥤", "vino": "Bebidas 🥤", "tequila": "Bebidas 🥤", "chelas": "Bebidas 🥤",
+            "papas": "Botanas y Dulces 🍫", "sabritas": "Botanas y Dulces 🍫", "botana": "Botanas y Dulces 🍫", "chocolate": "Botanas y Dulces 🍫", "dulces": "Botanas y Dulces 🍫", "chicles": "Botanas y Dulces 🍫", "cacahuates": "Botanas y Dulces 🍫", "palomitas": "Botanas y Dulces 🍫",
+            "detergente": "Limpieza y Hogar 🧹", "jabon": "Limpieza y Hogar 🧹", "cloro": "Limpieza y Hogar 🧹", "suavitel": "Limpieza y Hogar 🧹", "fabuloso": "Limpieza y Hogar 🧹", "papel higienico": "Limpieza y Hogar 🧹", "servilletas": "Limpieza y Hogar 🧹", "bolsas basura": "Limpieza y Hogar 🧹", "escoba": "Limpieza y Hogar 🧹", "trapeador": "Limpieza y Hogar 🧹", "fibras": "Limpieza y Hogar 🧹",
+            "shampoo": "Higiene Personal 🛁", "acondicionador": "Higiene Personal 🛁", "jabon corporal": "Higiene Personal 🛁", "desodorante": "Higiene Personal 🛁", "pasta dental": "Higiene Personal 🛁", "cepillo dientes": "Higiene Personal 🛁", "crema corporal": "Higiene Personal 🛁", "toallas femeninas": "Higiene Personal 🛁", "rastrillos": "Higiene Personal 🛁",
+            "croquetas": "Mascotas 🐶", "alimento perro": "Mascotas 🐶", "alimento gato": "Mascotas 🐶", "arena gato": "Mascotas 🐶",
+            "aspirina": "Farmacia 💊", "paracetamol": "Farmacia 💊", "ibuprofeno": "Farmacia 💊", "curitas": "Farmacia 💊", "alcohol": "Farmacia 💊", "vitaminas": "Farmacia 💊", "condones": "Farmacia 💊",
+            "pañales": "Bebés 🍼", "panales": "Bebés 🍼", "toallitas humedas": "Bebés 🍼", "formula": "Bebés 🍼", "gerber": "Bebés 🍼"
+        };
+
         const App = {
             config: { 
                 broker: 'wss://broker.hivemq.com:8884/mqtt',
@@ -259,7 +286,7 @@
             },
             
             state: { 
-                items: [], 
+                items: [], // { id, text, category, done, deleted, timestamp, lastAuthor }
                 meta: { title: "NUEVA LISTA", timestamp: 0, lastAuthor: "" }
             },
             
@@ -268,7 +295,7 @@
             client: null,
             roomId: null,
             isShared: false,
-            sortMode: 'time', // time | asc | desc
+            sortMode: 'time', // time | asc | desc | aisle
 
             init() {
                 this.cacheDOM();
@@ -303,6 +330,7 @@
                     toast: document.getElementById('toast'),
                     overlay: document.getElementById('connect-overlay'),
                     sortBadge: document.getElementById('sort-badge'),
+                    aisleBadge: document.getElementById('aisle-badge'),
                     mUsers: document.getElementById('modal-users'),
                     mLib: document.getElementById('modal-library')
                 };
@@ -346,11 +374,8 @@
                 this.dom.title.oninput = () => {
                     this.state.meta.title = this.dom.title.innerText;
                     this.state.meta.timestamp = Date.now();
-                    
-                    // CRITICAL FIX: Save index immediately on input so library is always fresh
                     const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
                     this.updateLibraryIndex(key, this.roomId);
-                    
                     this.save();
                     if(this.isShared) this.publishState();
                 };
@@ -395,9 +420,16 @@
 
                 // SORTING LOGIC
                 document.getElementById('btn-sort').onclick = () => {
-                    if (this.sortMode === 'time') this.sortMode = 'asc';
-                    else if (this.sortMode === 'asc') this.sortMode = 'desc';
-                    else this.sortMode = 'time';
+                    this.sortMode = (this.sortMode === 'time') ? 'asc' : (this.sortMode === 'asc') ? 'desc' : 'time';
+                    // Reset aisle mode if sorting by text
+                    this.dom.aisleBadge.innerText = "";
+                    this.render();
+                };
+
+                document.getElementById('btn-aisle').onclick = () => {
+                    this.sortMode = (this.sortMode === 'aisle') ? 'time' : 'aisle';
+                    // Reset text sort if aisle mode
+                    this.dom.sortBadge.innerText = "";
                     this.render();
                 };
 
@@ -451,13 +483,38 @@
                 };
             },
 
+            // --- CATEGORIZATION ENGINE ---
+            normalize(str) {
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            },
+
+            categorize(text) {
+                // 1. Direct Lookup
+                const norm = this.normalize(text);
+                if (SUPERMARKET_DICT[norm]) return SUPERMARKET_DICT[norm];
+
+                // 2. Fuzzy Containment (e.g. "manzanas rojas" -> "manzana")
+                // Check if any key in dictionary is part of the input
+                for (let key in SUPERMARKET_DICT) {
+                    // Start checking longer keys to avoid matching "pan" in "pantalla" incorrectly (heuristic)
+                    // For simplicity, just check includes
+                    if (norm.includes(key)) return SUPERMARKET_DICT[key];
+                }
+
+                return null;
+            },
+
+            // --- CORE LOGIC ---
             addItem(inputEl) {
                 const txt = inputEl.value.trim();
                 if (!txt) return;
 
+                const cat = this.categorize(txt);
+
                 this.state.items.push({
                     id: Date.now(),
                     text: txt,
+                    category: cat,
                     done: false,
                     deleted: false,
                     timestamp: Date.now(),
@@ -523,11 +580,8 @@
                 if (remoteState.meta && remoteState.meta.timestamp > this.state.meta.timestamp) {
                     this.state.meta = remoteState.meta;
                     this.dom.title.innerText = remoteState.meta.title;
-                    
-                    // Update Library Title Index if synced
                     const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
                     this.updateLibraryIndex(key, this.roomId);
-                    
                     changed = true;
                 }
 
@@ -599,7 +653,6 @@
                         const meta = index[rid];
                         const div = document.createElement('div');
                         div.className = `saved-room ${rid === this.roomId ? 'active-room' : ''}`;
-                        // REMOVED: Timestamp and ID, only Title shown
                         div.innerHTML = `<strong>${meta.title}</strong>`;
                         div.onclick = () => {
                             const param = isSharedCol ? 'room' : 'local';
@@ -620,22 +673,46 @@
                 let pending = this.state.items.filter(i => !i.done && !i.deleted);
                 const completed = this.state.items.filter(i => i.done && !i.deleted).sort((a,b) => b.timestamp - a.timestamp);
 
-                // SORTING LOGIC
-                if (this.sortMode === 'asc') {
-                    pending.sort((a,b) => a.text.localeCompare(b.text));
-                    this.dom.sortBadge.innerText = "A-Z";
-                } else if (this.sortMode === 'desc') {
-                    pending.sort((a,b) => b.text.localeCompare(a.text));
-                    this.dom.sortBadge.innerText = "Z-A";
-                } else {
-                    // Default: Time
-                    pending.sort((a,b) => a.timestamp - b.timestamp);
+                if (this.sortMode === 'aisle') {
+                    this.dom.aisleBadge.innerText = "ON";
                     this.dom.sortBadge.innerText = "";
+                    
+                    // Group by category
+                    const grouped = {};
+                    pending.forEach(i => {
+                        const cat = i.category || "Otros 🛒";
+                        if(!grouped[cat]) grouped[cat] = [];
+                        grouped[cat].push(i);
+                    });
+                    
+                    // Render groups
+                    Object.keys(grouped).sort().forEach(cat => {
+                        const header = document.createElement('div');
+                        header.className = 'aisle-header';
+                        header.innerText = cat;
+                        this.dom.pBox.appendChild(header);
+                        
+                        grouped[cat].forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
+                    });
+                    
+                } else {
+                    this.dom.aisleBadge.innerText = "";
+                    
+                    if (this.sortMode === 'asc') {
+                        pending.sort((a,b) => a.text.localeCompare(b.text));
+                        this.dom.sortBadge.innerText = "A-Z";
+                    } else if (this.sortMode === 'desc') {
+                        pending.sort((a,b) => b.text.localeCompare(a.text));
+                        this.dom.sortBadge.innerText = "Z-A";
+                    } else {
+                        pending.sort((a,b) => a.timestamp - b.timestamp);
+                        this.dom.sortBadge.innerText = "";
+                    }
+                    
+                    pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
                 }
 
-                pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
                 completed.forEach(i => this.dom.cBox.appendChild(this.createRow(i)));
-                
                 this.renderPeers();
             },
 
@@ -644,16 +721,27 @@
                 div.className = `row ${item.done ? 'done' : ''}`;
                 div.onclick = () => this.toggleItem(item.id);
 
+                const content = document.createElement('div');
+                content.className = 'item-content';
+                
                 const txt = document.createElement('div');
                 txt.className = 'txt';
                 txt.textContent = item.text;
+                content.appendChild(txt);
+
+                if(item.category) {
+                    const cat = document.createElement('div');
+                    cat.className = 'cat-tag';
+                    cat.textContent = item.category;
+                    content.appendChild(cat);
+                }
 
                 const del = document.createElement('div');
                 del.className = 'del';
                 del.innerHTML = '&times;';
                 del.onclick = (e) => this.deleteItem(item.id, e);
 
-                div.append(txt, del);
+                div.append(content, del);
                 return div;
             },
 
@@ -696,22 +784,3 @@
     </script>
 </body>
 </html>
-```
-
-### Brainstorm: "AI-Free Categorization"
-
-Now, let's tackle your challenge: **How to sort items into Supermarket Aisles (Produce, Dairy, etc.) without hitting an AI API.**
-
-This is a classic "Client-Side Intelligence" problem.
-
-#### The "Dictionary" Approach (My Recommendation)
-We can build a lightweight, specialized dictionary directly into the JavaScript code.
-* **Mechanism:** A JSON object mapping common keywords to categories.
-* **Example:**
-    ```javascript
-    const AISLES = {
-      "manzana": "🍎 Frutas",
-      "leche": "🥛 Lácteos",
-      "pan": "🍞 Panadería",
-      "shampoo": "🛁 Higiene"
-    };
