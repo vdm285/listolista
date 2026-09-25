@@ -87,7 +87,7 @@ var ListoAisles = (function () {
     var unitsRe = '(?:' + Object.keys(UNITS).join('|') + ')';
     var numWordRe = '(?:' + Object.keys(NUM_WORDS).join('|') + ')';
     var num = '(?:\\d+/\\d+|\\d+\\.\\d+|\\d+)';
-    var qty = num + '(?:\\s+' + unitsRe + '\\b)?(?:\\s+de)?';
+    var qty = num + '\\b(?:\\s+' + unitsRe + '\\b)?(?:\\s+de)?';
     var qtyWord = numWordRe + '(?:\\s+' + unitsRe + '\\b)(?:\\s+de)?';
     var startRe = new RegExp('^\\s*(?:(' + qty + '|' + qtyWord + ')\\s*)(.*)');
     var endRe = new RegExp('^(.*)\\s*(?:(' + qty + '|' + qtyWord + '))\\s*$');
@@ -162,7 +162,7 @@ var ListoAisles = (function () {
     if (!key) return { id: 'OTR', term: null, guess: false };
 
     // step 2 – overrides
-    if (overrides && overrides[key]) {
+    if (overrides && Object.prototype.hasOwnProperty.call(overrides, key)) {
       return { id: overrides[key], term: key, guess: false };
     }
 
@@ -181,7 +181,7 @@ var ListoAisles = (function () {
 
         // skip filler-only terms
         var allFiller = true;
-        for (var f = 0; f < twc; f++) { if (!FILLERS[tw[f]]) { allFiller = false; break; } }
+        for (var f = 0; f < twc; f++) { if (!Object.prototype.hasOwnProperty.call(FILLERS, tw[f])) { allFiller = false; break; } }
         if (allFiller) continue;
 
         var bestPos = -1;
@@ -213,35 +213,40 @@ var ListoAisles = (function () {
     // for 8+ letter words allow distance 2
     var bestDist = 99;
     var bestAisle = null;
+    var bestTerm = null;
     var foundAny = false;
 
     for (var wi = 0; wi < words.length; wi++) {
       if (words[wi].length < 5) continue;
       var limit = words[wi].length >= 8 ? 2 : 1;
       for (var st in index.singles) {
+        if (!Object.prototype.hasOwnProperty.call(index.singles, st)) continue;
         var dist = dl(words[wi], st);
         if (dist > limit) continue;
         if (dist > bestDist) continue;
         foundAny = true;
         if (dist < bestDist) {
           bestDist = dist;
-          bestAisle = index.singles[st];
+          bestAisle = index.singles[st].slice();
+          bestTerm = st;
         } else if (dist === bestDist) {
-          // merge aisles
+          // merge aisles – copy first so we don't mutate the index
+          var merged = bestAisle.slice();
           for (var k = 0; k < index.singles[st].length; k++) {
             var a = index.singles[st][k];
             var already = false;
-            for (var l = 0; l < bestAisle.length; l++) {
-              if (bestAisle[l] === a) { already = true; break; }
+            for (var l = 0; l < merged.length; l++) {
+              if (merged[l] === a) { already = true; break; }
             }
-            if (!already) bestAisle.push(a);
+            if (!already) merged.push(a);
           }
+          bestAisle = merged;
         }
       }
     }
 
     if (foundAny && bestAisle && bestAisle.length === 1) {
-      return { id: bestAisle[0], term: null, guess: true };
+      return { id: bestAisle[0], term: bestTerm, guess: true };
     }
 
     // step 5
