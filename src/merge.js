@@ -49,11 +49,11 @@ var ListoMerge = (function () {
     var remoteItems = remote.items || [];
 
     // Build lookup indices (keys are item ids).
-    var localIdx = {};
+    var localIdx = Object.create(null);
     for (var i = 0; i < localItems.length; i++) {
       localIdx[localItems[i].id] = i;
     }
-    var remoteIdx = {};
+    var remoteIdx = Object.create(null);
     for (var j = 0; j < remoteItems.length; j++) {
       remoteIdx[remoteItems[j].id] = j;
     }

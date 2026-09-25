@@ -25,6 +25,55 @@
   var RELAY = isLocalDev ? 'ws://127.0.0.1:8787' : (typeof LISTO_RELAY === 'string' ? LISTO_RELAY : '');
 
   function emptyState(title) { return { meta: { title: title || 'LISTA', timestamp: 0 }, items: [], ovr: {} }; }
+  // Every edit must beat the version it was made on, even if this phone's clock is behind.
+  function bump(old) { return Math.max(now(), (old || 0) + 1); }
+  var TOMBSTONE_DAYS = 60;    // deleted items are forgotten after this; keeps shared lists small forever
+  var ID_RE = /^[A-Za-z0-9-]{1,40}$/, KEY_RE = /^[a-z0-9 .\/]{1,120}$/;
+
+  // Anything read from storage or the network is checked and trimmed before use.
+  function sanitize(st) {
+    if (!st || typeof st !== 'object') return null;
+    var max = now() + 24 * 3600 * 1000, seen = Object.create(null), items = [];
+    var num = function (v) { v = Number(v); return isFinite(v) && v > 0 ? Math.min(v, max) : 0; };
+    (Array.isArray(st.items) ? st.items : []).forEach(function (i) {
+      if (!i || typeof i !== 'object') return;
+      var id = typeof i.id === 'number' ? String(i.id) : i.id;
+      if (typeof id !== 'string' || !ID_RE.test(id) || seen[id]) return;
+      seen[id] = true;
+      if (i.deleted === true && typeof i.text !== 'string') { items.push({ id: id, deleted: true, timestamp: num(i.timestamp) }); return; }
+      if (typeof i.text !== 'string' || !i.text.trim()) return;
+      var it = { id: id, text: i.text.slice(0, 300), done: !!i.done, deleted: !!i.deleted, timestamp: num(i.timestamp),
+                 created: num(i.created) || num(i.timestamp) };
+      if (typeof i.by === 'string') it.by = i.by.slice(0, 20);
+      items.push(it);
+    });
+    var m = st.meta && typeof st.meta === 'object' ? st.meta : {};
+    var out = { items: items, meta: { title: typeof m.title === 'string' && m.title.trim() ? m.title.slice(0, 120) : 'LISTA',
+                                      timestamp: num(m.timestamp) }, ovr: {} };
+    var known = ListoAisles.AISLES.map(function (a) { return a.id; });
+    if (st.ovr && typeof st.ovr === 'object') Object.keys(st.ovr).slice(0, 3000).forEach(function (k) {
+      var v = st.ovr[k];
+      if (KEY_RE.test(k) && v && known.indexOf(v.aisle) >= 0) out.ovr[k] = { aisle: v.aisle, ts: num(v.ts) };
+    });
+    if (st.order && Array.isArray(st.order.ids)) {
+      out.order = { ids: st.order.ids.filter(function (x) { return known.indexOf(x) >= 0; }), ts: num(st.order.ts) };
+    }
+    return out;
+  }
+  // Forget deletions older than TOMBSTONE_DAYS (a phone offline longer than that could bring one back).
+  function purgeOld(st) {
+    var cutoff = now() - TOMBSTONE_DAYS * 24 * 3600 * 1000;
+    st.items = st.items.filter(function (i) { return !i.deleted || (i.timestamp || 0) > cutoff; });
+    return st;
+  }
+  // What travels to the relay: deleted items shrink to {id, deleted, timestamp}.
+  function wire(st) {
+    var out = Object.assign({}, st);
+    out.items = purgeOld({ items: st.items.slice() }).items.map(function (i) {
+      return i.deleted ? { id: i.id, deleted: true, timestamp: i.timestamp || 0 } : i;
+    });
+    return out;
+  }
   function hints() { return store.get(K.hints, {}); }
   function setHint(k) { var h = hints(); h[k] = true; store.set(K.hints, h); }
 
@@ -48,6 +97,9 @@
         map[oldId] = id;
       });
     });
+    var lastOld = null; try { lastOld = localStorage.getItem('last_local_id'); } catch (e) {}
+    var newest = Object.keys(lists).sort(function (a, b) { return (lists[b].lastVisited || 0) - (lists[a].lastVisited || 0); })[0];
+    if (!store.get(K.last) && (map[lastOld] || newest)) store.set(K.last, map[lastOld] || newest);
     store.set(K.index, lists); store.set(K.v1map, map); store.set('ll2_migrated', true);
   }
 
@@ -63,41 +115,54 @@
     store.set(K.index, idx);
   }
   function persist() {
+    var stored = sanitize(store.get(K.list(cur.id)));
+    if (stored) cur.state = ListoMerge.merge(cur.state, stored).state;   // another open copy may have saved
+    purgeOld(cur.state);
     store.set(K.list(cur.id), cur.state);
-    touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret || undefined });
+    var e = listIndex()[cur.id];
+    var blank = !cur.state.items.length && !cur.state.meta.timestamp && !cur.secret;
+    if (e || !blank) touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret || undefined });
   }
   function changed(ids) {
     persist();
-    if (cur.relay) cur.relay.put(cur.state);
+    if (cur.relay) cur.relay.put(wire(cur.state));
     render(ids);
   }
 
   function closeCurrent() {
     if (cur.relay) { cur.relay.close(); cur.relay = null; }
+    clearTimeout(snackTimer); snackUndo = null; $('snack').classList.remove('show');   // undo belongs to the old list
     cur = { id: null, secret: null, keys: null, relay: null, state: null, status: 'local' };
   }
 
   function openLocal(id) {
     closeCurrent();
     cur.id = id;
-    cur.state = store.get(K.list(id)) || emptyState();
-    view.aisles = !!(listIndex()[id] || {}).aisles;
+    cur.state = sanitize(store.get(K.list(id))) || emptyState();
+    var e = listIndex()[id] || {};
+    view.aisles = !!e.aisles;
     store.set(K.last, id);
     history.replaceState(null, '', location.pathname + '#l=' + id);
     persist(); setStatus('local'); render(); focusInput();
+    if (e.wasShared && !hints()['ws_' + id]) {
+      showHint('Esta lista antes se compartía. Ahora las listas compartidas son privadas y cifradas: toca Compartir y manda el nuevo enlace a quien la usaba.', 'ws_' + id);
+    }
   }
 
   function openShared(secret) {
     closeCurrent();
     return ListoSync.derive(secret).then(function (keys) {
       cur.id = keys.roomId; cur.secret = secret; cur.keys = keys;
-      cur.state = store.get(K.list(cur.id)) || emptyState();
+      cur.state = sanitize(store.get(K.list(cur.id))) || emptyState();
       view.aisles = !!(listIndex()[cur.id] || {}).aisles;
       store.set(K.last, cur.id);
       history.replaceState(null, '', location.pathname + '#k=' + secret);
-      persist(); render(); focusInput();
       connect();
-    }).catch(function () { toast('Ese enlace no es válido.'); openLocal('l_' + rid(8)); });
+      persist();
+      try { render(); } catch (e) { cur.state = emptyState(); render(); }
+      focusInput();
+      if (isIOS() && !isStandalone()) setTimeout(function () { showInstallHint(false); }, 1500);
+    }, function () { toast('Ese enlace no es válido.'); openLocal('l_' + rid(8)); });
   }
 
   function connect() {
@@ -114,7 +179,8 @@
   }
 
   function onRemote(remote) {
-    var before = {};
+    if (remote) { remote = sanitize(remote); if (!remote) return; }
+    var before = Object.create(null);
     cur.state.items.forEach(function (i) { before[i.id] = i.timestamp || 0; });
     var m = ListoMerge.merge(cur.state, remote);
     cur.state = m.state;
@@ -126,7 +192,7 @@
       touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret });
       render(ids);
     }
-    if (m.localNewer && cur.relay) cur.relay.put(cur.state);
+    if (m.localNewer && cur.relay) cur.relay.put(wire(cur.state));
   }
 
   function setStatus(s) {
@@ -162,41 +228,43 @@
     input.value = '';
     changed(ids);
     input.focus();
+    var last = document.querySelector('[data-id="' + ids[ids.length - 1] + '"]');
+    if (last && last.getBoundingClientRect().top > (window.visualViewport ? visualViewport.height : innerHeight) - 40) {
+      toast(ids.length > 1 ? 'Añadidos ' + ids.length + ' artículos (abajo)' : 'Añadido: ' + text + ' (abajo)');
+    }
   }
   function find(id) { return cur.state.items.find(function (i) { return i.id === id; }); }
   function toggle(id) {
     var it = find(id); if (!it) return;
-    it.done = !it.done; it.timestamp = now();
+    it.done = !it.done; it.timestamp = bump(it.timestamp);
     changed([id]);
   }
   function remove(id) {
     var it = find(id); if (!it) return;
-    it.deleted = true; it.timestamp = now();
+    it.deleted = true; it.timestamp = bump(it.timestamp);
     changed([]);
-    undo('Borrado: ' + it.text, function () { it.deleted = false; it.timestamp = now(); changed([id]); });
+    undo('Borrado: ' + it.text, function () { it.deleted = false; it.timestamp = bump(it.timestamp); changed([id]); });
   }
   function editText(id, text) {
     var it = find(id); if (!it || !text.trim() || text.trim() === it.text) return;
-    it.text = text.trim(); it.timestamp = now();
+    it.text = text.trim(); it.timestamp = bump(it.timestamp);
     changed([id]);
   }
   function clearDone() {
     var gone = cur.state.items.filter(function (i) { return i.done && !i.deleted; });
     if (!gone.length) return;
-    var t = now();
-    gone.forEach(function (i) { i.deleted = true; i.timestamp = t; });
+    gone.forEach(function (i) { i.deleted = true; i.timestamp = bump(i.timestamp); });
     changed([]);
     undo(gone.length + (gone.length === 1 ? ' tachado borrado' : ' tachados borrados'), function () {
-      var t2 = now(); gone.forEach(function (i) { i.deleted = false; i.timestamp = t2; }); changed([]);
+      gone.forEach(function (i) { i.deleted = false; i.timestamp = bump(i.timestamp); }); changed([]);
     });
   }
   function emptyList() {
     var gone = cur.state.items.filter(function (i) { return !i.deleted; });
     if (!gone.length) return;
-    var t = now();
-    gone.forEach(function (i) { i.deleted = true; i.timestamp = t; });
+    gone.forEach(function (i) { i.deleted = true; i.timestamp = bump(i.timestamp); });
     changed([]);
-    undo('Lista vaciada', function () { var t2 = now(); gone.forEach(function (i) { i.deleted = false; i.timestamp = t2; }); changed([]); });
+    undo('Lista vaciada', function () { gone.forEach(function (i) { i.deleted = false; i.timestamp = bump(i.timestamp); }); changed([]); });
   }
 
   // ---------- aisles (loaded on first use: pay for what you use) ----------
@@ -232,14 +300,15 @@
   function itemKey(text) { return ListoAisles.stripQuantity(ListoAisles.fold(text)); }
   function setAisle(it, aisleId) {
     cur.state.ovr = cur.state.ovr || {};
-    cur.state.ovr[itemKey(it.text)] = { aisle: aisleId, ts: now() };
+    var k = itemKey(it.text);
+    cur.state.ovr[k] = { aisle: aisleId, ts: bump((cur.state.ovr[k] || {}).ts) };
     changed([it.id]);
   }
   function moveAisle(id, dir) {
     var order = aisleOrder(), i = order.indexOf(id), j = i + dir;
     if (i < 0 || j < 0 || j >= order.length) return;
     order[i] = order[j]; order[j] = id;
-    cur.state.order = { ids: order, ts: now() };
+    cur.state.order = { ids: order, ts: bump((cur.state.order || {}).ts) };
     changed([]);
   }
 
@@ -259,7 +328,7 @@
 
     var pBox = $('pending'); pBox.textContent = '';
     if (view.aisles) {
-      var idx = aisles(), ov = overrides(), groups = {};
+      var idx = aisles(), ov = overrides(), groups = Object.create(null);
       pending.forEach(function (it) {
         var r = ListoAisles.aisleOf(it.text, idx, ov);
         (groups[r.id] = groups[r.id] || []).push({ it: it, r: r });
@@ -288,46 +357,73 @@
 
   function row(it, aisle) {
     var r = el('div', 'row' + (it.done ? ' done' : '') + (flashIds[it.id] ? ' flash' : ''));
-    r.setAttribute('role', 'checkbox'); r.setAttribute('aria-checked', it.done ? 'true' : 'false'); r.tabIndex = 0;
-    r.appendChild(el('span', 'txt', it.text));
+    r.dataset.id = it.id;
+    var txt = el('span', 'txt', it.text);
+    txt.setAttribute('role', 'checkbox'); txt.setAttribute('aria-checked', it.done ? 'true' : 'false'); txt.tabIndex = 0;
+    r.appendChild(txt);
     if (aisle) {
       var tag = el('button', 'tag' + (aisle.guess ? ' guess' : ''), aisleName(aisle.id) + (aisle.guess ? '?' : ''));
-      tag.setAttribute('aria-label', 'Cambiar pasillo de ' + it.text);
+      tag.setAttribute('aria-label', 'Cambiar pasillo de ' + it.text + ' (ahora: ' + aisleName(aisle.id) + ')');
       tag.onclick = function (e) { e.stopPropagation(); aislePicker(it, aisle.id); };
+      tag.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       r.appendChild(tag);
     }
-    // tap = strike / unstrike; long-press = edit / delete
+    // tap = strike / unstrike; long-press = edit / delete (one sheet per press, even on Android)
     var timer = null, long = false;
-    r.addEventListener('pointerdown', function () { long = false; timer = setTimeout(function () { long = true; itemSheet(it); }, 550); });
+    var openSheet = function () { if (long) return; long = true; clearTimeout(timer); itemSheet(it); };
+    r.addEventListener('pointerdown', function () { long = false; clearTimeout(timer); timer = setTimeout(openSheet, 550); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { r.addEventListener(ev, function () { clearTimeout(timer); }); });
-    r.addEventListener('contextmenu', function (e) { e.preventDefault(); if (!long) { long = true; itemSheet(it); } });
-    r.addEventListener('click', function () { if (long) { long = false; return; } toggle(it.id); maybeLongPressHint(); });
-    r.addEventListener('keydown', function (e) {
+    r.addEventListener('contextmenu', function (e) { e.preventDefault(); openSheet(); });
+    r.addEventListener('click', function (e) {
+      if (e.target.closest('.tag')) return;
+      if (long) { long = false; return; }
+      toggle(it.id); maybeLongPressHint();
+    });
+    txt.addEventListener('keydown', function (e) {
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(it.id); }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(it.id); }
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); itemSheet(it); }
     });
     return r;
   }
 
   // ---------- sheets (menu, lists, item actions, aisle picker, aisle order) ----------
+  var closeOpenSheet = null;
+  window.addEventListener('popstate', function () { if (closeOpenSheet) closeOpenSheet(true); });
   function sheet(build) {
+    if (closeOpenSheet) closeOpenSheet();
     var bg = el('div', 'sheet-bg'), s = el('div', 'sheet');
-    s.setAttribute('role', 'dialog');
+    s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true');
     bg.appendChild(s);
-    var close = function () { bg.remove(); document.removeEventListener('keydown', esc); };
+    var closed = false;
+    var close = function (fromBack) {
+      if (closed) return; closed = true; closeOpenSheet = null;
+      bg.remove(); document.removeEventListener('keydown', esc);
+      // leave the extra history entry harmless (Back then stays on this list)
+      if (!fromBack && history.state && history.state.sheet) history.replaceState(null, '', location.href);
+    };
     var esc = function (e) { if (e.key === 'Escape') close(); };
     bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
     document.addEventListener('keydown', esc);
+    var x = el('button', 'sheet-close', 'Cerrar');
+    x.onclick = function () { close(); };
+    s.appendChild(x);
     build(s, close);
+    history.pushState({ sheet: true }, '', location.href);   // Back closes the sheet instead of leaving
+    closeOpenSheet = close;
     document.body.appendChild(bg);
-    var first = s.querySelector('input, button'); if (first && first.tagName === 'INPUT') first.focus();
+    var first = s.querySelector('input') || s.querySelector('.opt, .aisle-grid button, .order-row button');
+    if (first) first.focus();
     return close;
   }
   function opt(label, onClick, extra) {
     var b = el('button', 'opt' + (extra && extra.warn ? ' warn' : ''));
     b.appendChild(el('span', '', label));
     if (extra && extra.small) b.appendChild(el('small', '', extra.small));
-    if (extra && extra.sw != null) b.appendChild(el('span', 'switch' + (extra.sw ? ' on' : '')));
+    if (extra && extra.sw != null) {
+      b.appendChild(el('span', 'switch' + (extra.sw ? ' on' : '')));
+      b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', extra.sw ? 'true' : 'false');
+    }
     b.onclick = onClick;
     return b;
   }
@@ -342,7 +438,11 @@
       s.appendChild(opt('Mis listas', function () { close(); listsSheet(); }));
       s.appendChild(opt('Nueva lista', function () { close(); openLocal('l_' + rid(8)); }));
       if (installPrompt) s.appendChild(opt('Instalar como app', function () { close(); installPrompt.prompt(); installPrompt = null; }));
-      else if (isIOS() && !isStandalone()) s.appendChild(opt('Usar como app', function () { close(); showInstallHint(true); }));
+      else if (isIOS() && !isStandalone()) s.appendChild(opt('Usar como app', function () {
+        close();
+        if (cur.secret) showInstallHint(true);
+        else showHint('En iPhone, primero toca Compartir: el ícono de inicio debe crearse desde el enlace de la lista para que la abra.', null);
+      }));
       s.appendChild(opt('Vaciar la lista', function () { close(); emptyList(); }, { warn: true }));
     });
   }
@@ -467,14 +567,17 @@
   }
   var isIOS = function () { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); };
   var isStandalone = function () { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; };
-  function showInstallHint(force) {
-    if (!force && hints().install) return;
+  function showHint(text, key) {
     var h = $('hint');
     h.textContent = '';
-    h.appendChild(el('div', '', 'Para tenerla como app en tu iPhone: toca Compartir (el cuadro con la flecha) y luego «Agregar a inicio». Hazlo desde esta lista para que el ícono la abra.'));
+    h.appendChild(el('div', '', text));
     var ok = el('button', '', 'Entendido');
-    ok.onclick = function () { setHint('install'); h.classList.remove('show'); };
+    ok.onclick = function () { if (key) setHint(key); h.classList.remove('show'); };
     h.appendChild(ok); h.classList.add('show');
+  }
+  function showInstallHint(force) {
+    if (!force && hints().install) return;
+    showHint('Para tenerla como app en tu iPhone: en Safari toca Compartir (el cuadro con la flecha; si no lo ves, toca ⋯ junto a la dirección) y elige «Agregar a inicio». Hazlo con esta lista abierta para que el ícono la abra.', 'install');
   }
   var installPrompt = null;
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installPrompt = e; });
@@ -490,11 +593,10 @@
     ['i1', 'i2'].forEach(function (id) {
       var inp = $(id);
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addFrom(inp); } });
-      inp.addEventListener('blur', function () { if (inp.value.trim()) addFrom(inp); });
     });
     var title = $('title'), titleTimer = null;
     title.addEventListener('input', function () {
-      cur.state.meta = Object.assign({}, cur.state.meta, { title: title.textContent.trim() || 'LISTA', timestamp: now() });
+      cur.state.meta = Object.assign({}, cur.state.meta, { title: (title.textContent.trim() || 'LISTA').slice(0, 120), timestamp: bump(cur.state.meta.timestamp) });
       clearTimeout(titleTimer);
       titleTimer = setTimeout(function () { changed([]); }, 400);
     });
@@ -509,9 +611,21 @@
     window.addEventListener('hashchange', function () { start(); });
     // After the phone sleeps, always open a fresh connection (sockets die silently in the background).
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && cur.relay) cur.relay.reconnectNow();
+      if (document.visibilityState !== 'visible') return;
+      if (cur.relay) cur.relay.reconnectNow();
+      else if (cur.id) { var st = sanitize(store.get(K.list(cur.id))); if (st) { cur.state = ListoMerge.merge(cur.state, st).state; render(); } }
     });
-    window.addEventListener('pagehide', function () { if (cur.id) store.set(K.list(cur.id), cur.state); });
+    window.addEventListener('online', function () { if (cur.relay) cur.relay.reconnectNow(); });
+    // Another open copy of the app (tab or installed app) saved this list: merge it in.
+    window.addEventListener('storage', function (e) {
+      if (!cur.id || e.key !== K.list(cur.id) || !e.newValue) return;
+      var st; try { st = sanitize(JSON.parse(e.newValue)); } catch (err) { return; }
+      if (!st) return;
+      var m = ListoMerge.merge(cur.state, st);
+      cur.state = m.state;
+      if (m.changed) render();
+    });
+    window.addEventListener('pagehide', function () { if (cur.id) persist(); });
     window.addEventListener('resize', layout);
   }
 
@@ -524,6 +638,7 @@
     if (k) return openShared(k);
     var old = q.get('room') || q.get('local'), v1 = store.get(K.v1map, {});
     if (old && v1[old]) { history.replaceState(null, '', location.pathname); return openLocal(v1[old]); }
+    if (old) { history.replaceState(null, '', location.pathname); setTimeout(function () { toast('Esa lista no está en este teléfono. Pide un enlace nuevo.'); }, 300); }
     if (l && store.get(K.list(l))) return openLocal(l);
     var last = store.get(K.last), e = last && listIndex()[last];
     if (e) return e.secret ? openShared(e.secret) : openLocal(last);

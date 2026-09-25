@@ -12,10 +12,11 @@ case "${1:-}" in
     echo "Now rebuild the app with that address: python3 tools/build.py --relay wss://<the workers.dev host>"
     ;;
   preview)
+    grep -q 'var LISTO_RELAY = "wss://' index.html || { echo "index.html has no relay address: run python3 tools/build.py --relay wss://..."; exit 1; }
     python3 tools/check-dict.py >/dev/null
     sh tests/run.sh >/dev/null
     STAGE=$(mktemp -d)
-    cp index.html sw.js manifest.webmanifest "$STAGE"/ && cp -R icons "$STAGE"/icons
+    cp index.html sw.js manifest.webmanifest manifest-android.webmanifest "$STAGE"/ && cp -R icons "$STAGE"/icons
     wrangler pages project create listolista-preview --production-branch main 2>/dev/null || true
     wrangler pages deploy "$STAGE" --project-name listolista-preview --branch main --commit-dirty=true
     rm -rf "$STAGE"

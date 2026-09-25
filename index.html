@@ -8,7 +8,16 @@
 <meta name="description" content="La lista más simple: escribe, comparte con un enlace y táchala en el súper.">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
-<link rel="manifest" href="manifest.webmanifest">
+<script>
+  // iPhone: no start_url, so a home-screen icon opens the list it was added from (its storage is separate).
+  // Android: start_url "./" (the icon opens the last list; the secret in the link never goes into the manifest).
+  (function () {
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var l = document.createElement('link'); l.rel = 'manifest';
+    l.href = ios ? 'manifest.webmanifest' : 'manifest-android.webmanifest';
+    document.head.appendChild(l);
+  })();
+</script>
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="ListoLista">
@@ -39,7 +48,7 @@
   }
   .bar { height: var(--bar); display: flex; align-items: center; gap: 4px; }
   #title {
-    flex: 1; min-width: 0; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase;
+    flex: 1; min-width: 0; font-weight: 700; font-size: 16px; letter-spacing: .05em; text-transform: uppercase;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: none; padding: 6px 2px;
   }
   #title:focus { border-bottom: 1px dashed var(--ink); text-overflow: clip; }
@@ -57,13 +66,13 @@
     position: absolute; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
-  .slot { display: flex; align-items: center; min-height: var(--row); border-bottom: 1px solid var(--dim); padding: 0 16px; }
+  .slot { display: flex; align-items: center; min-height: var(--row); border-bottom: 1px solid var(--dim); padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); }
   .slot input { width: 100%; border: 0; outline: none; background: transparent; color: var(--ink); font: 17px var(--font); padding: 14px 0; }
   .slot input::placeholder { color: var(--muted); }
 
   .row {
     display: flex; align-items: center; gap: 10px; min-height: var(--row); border-bottom: 1px solid var(--dim);
-    padding: 6px 12px 6px 16px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
+    padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
   }
   .row .txt { flex: 1; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
   .row.done .txt { text-decoration: line-through; color: var(--muted); }
@@ -83,12 +92,13 @@
     width: 100%; max-width: 520px; background: var(--bg); border-top: 2px solid var(--ink); border-radius: 16px 16px 0 0;
     padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px)); max-height: 80vh; overflow-y: auto;
   }
+  .sheet-close { display: block; margin: 2px 4px 0 auto; padding: 10px 12px; font-size: 15px; color: var(--muted); text-decoration: underline; }
   .sheet h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 10px 12px 6px; }
   .opt { width: 100%; text-align: left; padding: 14px 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 16px; }
   .opt:active { background: var(--dim); }
   .opt small { color: var(--muted); font-size: 13px; }
   .opt.warn { color: var(--warn); }
-  .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--dim); position: relative; flex: none; }
+  .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--dim); border: 1.5px solid var(--muted); position: relative; flex: none; }
   .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
   .switch.on { background: var(--done); } .switch.on::after { left: 19px; }
   .aisle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px 8px 8px; }
@@ -470,11 +480,11 @@ var ListoMerge = (function () {
     var remoteItems = remote.items || [];
 
     // Build lookup indices (keys are item ids).
-    var localIdx = {};
+    var localIdx = Object.create(null);
     for (var i = 0; i < localItems.length; i++) {
       localIdx[localItems[i].id] = i;
     }
-    var remoteIdx = {};
+    var remoteIdx = Object.create(null);
     for (var j = 0; j < remoteItems.length; j++) {
       remoteIdx[remoteItems[j].id] = j;
     }
@@ -689,39 +699,52 @@ var ListoSync = (function () {
   // onStatus('connecting'|'online'|'offline'); onError(code).
   function Relay(baseUrl, keys, handlers) {
     var self = this;
-    var ws = null, v = 0, synced = false, pending = null, sending = false, closed = false;
-    var retry = 0, hb = null, pongTimer = null, retryTimer = null;
+    var ws = null, v = 0, synced = false, pending = null, lastSent = null, sending = false, closed = false;
+    var retry = 0, hb = null, pongTimer = null, retryTimer = null, sendTimer = null;
     var status = function (s) { if (handlers.onStatus) handlers.onStatus(s); };
 
     function connect() {
       if (closed) return;
       clearTimeout(retryTimer);
       status('connecting');
-      try { ws = new WebSocket(baseUrl.replace(/\/$/, '') + '/r/' + keys.roomId); }
+      var sock;
+      try { sock = new WebSocket(baseUrl.replace(/\/$/, '') + '/r/' + keys.roomId); }
       catch (e) { return schedule(); }
-      ws.onopen = function () { retry = 0; status('online'); heartbeat(); };
-      ws.onmessage = function (e) {
+      ws = sock;
+      // Every handler first checks that its socket is still the current one (old sockets are ignored).
+      sock.onopen = function () { if (sock !== ws) return; retry = 0; status('online'); heartbeat(); };
+      sock.onmessage = function (e) {
+        if (sock !== ws || closed) return;
         if (e.data === 'pong') { clearTimeout(pongTimer); return; }
         var m; try { m = JSON.parse(e.data); } catch (err) { return; }
         if (m.t === 'snap' || m.t === 'conflict') {
+          clearTimeout(sendTimer);
           v = m.v; synced = true; sending = false;
+          if (m.t === 'snap' && lastSent && m.blob === lastSent) lastSent = null;   // our own change came back: done
           var done = function () { flush(); };
           if (m.blob) {
-            open(keys, m.blob).then(function (st) { handlers.onRemote(st); }, function () {
+            open(keys, m.blob).then(function (st) { if (sock === ws && !closed) handlers.onRemote(st); }, function () {
               if (handlers.onError) handlers.onError('decrypt');
             }).then(done);
           } else { handlers.onRemote(null); done(); }   // nothing stored yet: the app may upload
         } else if (m.t === 'err') {
+          clearTimeout(sendTimer);
           sending = false;
+          if (m.code === 'slow_down' && lastSentState) { pending = pending || lastSentState; setTimeout(flush, 3000); }
           if (handlers.onError) handlers.onError(m.code);
         }
       };
-      ws.onclose = function () { stopHeartbeat(); synced = false; sending = false; status('offline'); schedule(); };
-      ws.onerror = function () { try { ws.close(); } catch (e) {} };
+      sock.onclose = function () {
+        if (sock !== ws) return;
+        stopHeartbeat(); clearTimeout(sendTimer); synced = false;
+        if (sending && lastSentState) pending = pending || lastSentState;   // resend after reconnect
+        sending = false; status('offline'); schedule();
+      };
+      sock.onerror = function () { if (sock === ws) { try { sock.close(); } catch (e) {} } };
     }
     function schedule() {
       if (closed) return;
-      var ms = Math.min(15000, 1000 * Math.pow(2, retry++));
+      var ms = Math.min(8000, 1000 * Math.pow(2, retry++));
       retryTimer = setTimeout(connect, ms);
     }
     function heartbeat() {
@@ -730,18 +753,23 @@ var ListoSync = (function () {
         if (!ws || ws.readyState !== 1) return;
         ws.send('ping');
         clearTimeout(pongTimer);
-        pongTimer = setTimeout(function () { try { ws.close(); } catch (e) {} }, 10000);
-      }, 25000);
+        pongTimer = setTimeout(function () { self.reconnectNow(); }, 8000);
+      }, 20000);
     }
     function stopHeartbeat() { clearInterval(hb); clearTimeout(pongTimer); }
 
     // Send the newest local state once the relay has told us its current version.
+    var lastSentState = null;
     function flush() {
       if (!pending || sending || !synced || !ws || ws.readyState !== 1) return;
-      var st = pending; pending = null; sending = true;
+      var st = pending, sock = ws; pending = null; sending = true;
       seal(keys, st).then(function (blob) {
-        if (!ws || ws.readyState !== 1) { pending = pending || st; sending = false; return; }
-        ws.send(JSON.stringify({ t: 'put', base: v, blob: blob, tok: keys.tok }));
+        if (sock !== ws || sock.readyState !== 1) { pending = pending || st; sending = false; return; }
+        lastSent = blob; lastSentState = st;
+        sock.send(JSON.stringify({ t: 'put', base: v, blob: blob, tok: keys.tok }));
+        // No answer within 6 s: the connection is probably dead even if it looks open.
+        clearTimeout(sendTimer);
+        sendTimer = setTimeout(function () { if (sock === ws && sending) self.reconnectNow(); }, 6000);
       });
     }
 
@@ -749,11 +777,17 @@ var ListoSync = (function () {
     self.reconnectNow = function () {   // e.g. when the phone wakes up: always a fresh connection
       if (closed) return;
       retry = 0;
-      if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
-      stopHeartbeat(); synced = false; sending = false;
+      var old = ws; ws = null;
+      if (old) { try { old.close(); } catch (e) {} }
+      stopHeartbeat(); clearTimeout(sendTimer); clearTimeout(retryTimer);
+      if (sending && lastSentState) pending = pending || lastSentState;
+      synced = false; sending = false;
       connect();
     };
-    self.close = function () { closed = true; stopHeartbeat(); clearTimeout(retryTimer); if (ws) try { ws.close(); } catch (e) {} };
+    self.close = function () {
+      closed = true; stopHeartbeat(); clearTimeout(retryTimer); clearTimeout(sendTimer);
+      var old = ws; ws = null; if (old) try { old.close(); } catch (e) {}
+    };
     self.version = function () { return v; };
     connect();
   }
@@ -764,7 +798,7 @@ if (typeof globalThis !== 'undefined') globalThis.ListoSync = ListoSync;
 
 </script>
 <script>
-var LISTO_RELAY = "";
+var LISTO_RELAY = "wss://listolista-relay.vdm285.workers.dev";
 var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One line per aisle: ID: term|term|...  Terms are folded (lowercase, no accents); several words allowed.\n# The matcher (src/aisles.js) prefers the longest phrase, then the leftmost word.\n# After editing, run: python3 tools/check-dict.py\n# Converted 2026-09-25 from the dictionary inside index.html (last duplicate wins, as before);\n# conflicting duplicates to confirm are listed in data/aisles-review.md.\n\nFRU: acelgas|aguacate|aguacates|ajo|albahaca|apio|apios|arandanos|banana|berenjena|betabel|betabeles|brocoli|brocolis|calabacita|calabacitas|calabaza|camote|camotes|cebolla|cebolla morada|champinon|champinones|chayote|chicharo|chicharos|chile|chile ancho|chile cascabel|chile chipotle|chile guajillo|chile habanero|chile jalapeno|chile manzano|chile morron|chile mulato|chile pasilla|chile poblano|chile seco|chile serrano|cilantro|ciruela|ciruelas|coco|cocos|col|col morada|coliflor|coliflores|durazno|duraznos|ejote|ejotes|elote|epazote|esparragos|espinaca|flor de calabaza|flor de jamaica|frambuesa|fresa|fresas|frijol verde|guanabana|guayaba|guayabas|guisante|guisantes|hierbabuena|hongos|huitlacoche|jamaica|jicama|jicamas|jitomate|kiwi|lechuga|lima|limas|limon|limones|mamey|mandarina|mandarinas|mango|mangos|manzana|manzanas|melon|melones|menta|mora azul|naranja|naranjas|nopal|nopales|papa|papaya|papayas|pepino|pepinos|pera|peras|perejil|pimiento|pimiento amarillo|pimiento naranja|pimiento rojo|pimiento verde|pimienton|pina|pinas|platano|platano macho|platanos|quelite|quelites|rabano|rabanos|remolacha|remolachas|repollo|romeritos|romero|sandia|sandias|setas|tamarindo|tomate|tomate verde|toronja|toronjas|tuna|tunas|uva|uvas|verdolaga|verdolagas|yuca|yucas|zanahoria|zarzamora\nPAN: baguette|bimbo|birote|biscocho|bisquets|bizcocho|bolillo|bolillos|chapata|concha|conchas|croissant|cuernito|cuernitos|donas|elote pan|empanadas|garibaldi|harina para hot cakes|hot cakes|mantecadas|marranito|masa|medias noches|mexicano|pambazo|pan|pan arabe|pan blanco|pan bolillo|pan de caja|pan de dulce|pan de muerto|pan dulce|pan hamburguesa|pan hot dog|pan integral|pan molido|pan para hamburguesa|pan para hotdog|pan tostado|panquemado|pastel|polvoron|tamal|telera|teleras|tlaxcala|torta telera|tortillas|tortillas de harina|tortillas de maiz|tortillinas|tostadas\nCAR: aguayon|alas de pollo|albondigas|alitas|almejas|arrachera|atun enlatado|atun fresco|bacalao|bacalao seco|bistec|bistec de higado|bistec de res|bistecs de res|bistek|borrego|calamar|calamares|camaron|camarones|carne|carne ahumada|carne de bovino|carne de cerdo|carne de cerdo molida|carne de ovino|carne de puerco|carne de puerco molida|carne de res|carne de res molida|carne de res para deshebrar|carne molida|carne para asar|carne para bistek|carne para deshebrar|carne para guisar|carne para milanesa|carnero|carnes|cecina|cerdo|chorizo|chuleta|chuleta de cerdo|chuleta de res|corazon|corazon de cerdo|corazon de res|cordero|corte de res|costilla|costilla de cerdo|costilla de res|diesmillo|dorado|espaldilla de cerdo|falda de res|filete|filete de mojarra|filete de pescado|filete de robalo|higado|higado de cerdo|higado de res|huachinango|jamon|jamon de pavo|jamon de pierna|jamon de pollo|jamon serrano|lenguado|lomo de cerdo|longaniza|machaca|mariscos|mejillones|menudencias|milanesa|milanesa de pollo|mix de mariscos|mojarra|molida|molida de res|mortadela|muslo|nuggets|ostras|pancita|pastor|pavo|pavo entero|pechuga|pechuga de pavo|pechuga de pollo|pescado|pescados|pez|pierna|pierna de cerdo|pierna de pavo|pierna de pollo|pierna de res|pollo|pollo rostizado|puerco|pulpo|queso de puerco|res|robalo|salchicha|salchichas|salchichon|salmon|sierra|sirloin|suadero|surimi|tasajo|tilapia|tocino|tocinos|tripas|trucha|visceras\nLAC: actimel|actus|alpura|bebida de almendra|bebida de arroz|bebida de avena|bebida de coco|bebida de soya|bebida lactea|blanquillo|blanquillos|crema acida|crema acidificada|crema agria|crema batida|crema chantilly|crema de leche|crema para batir|crema para bebe|crema para cafe|crema para ninos|danone|danonino|docena de huevo|huevo|huevos|huevos blancos|huevos colorados|huevos de codorniz|huevos de gallina|huevos grandes|huevos organicos|jocoque|kefir|lala|leche|leche almendras|leche de avena|leche de coco|leche de soya|leche descremada|leche deslactosada|leche entera|leche fermentada|leche light|leche sin lactosa|manchego|mantequilla|mantequilla con sal|mantequilla light|mantequilla sin sal|margarina|margarina con sal|margarina light|margarina sin sal|media crema|mozzarella|nata|oaxaca|parmesano|philadelphia|queso|queso amarillo|queso cheddar|queso chihuahua|queso cotija|queso cottage|queso crema|queso de cabra|queso doble crema|queso fresco|queso gouda|queso manchego|queso mozzarella|queso oaxaca|queso panela|queso para derretir|queso parmesano|queso rayado|queso requeson|requeson|suero de leche|yakult|yogur|yogur de soya|yogurt|yogurt de soya|yogurt griego|yogurt natural|yoplait\nCON: \nDES: aceite|aceite canola|aceite de aguacate|aceite de canola|aceite de coco|aceite de girasol|aceite de oliva|aceite en aerosol|aceite oliva|aceite vegetal|aceitunas|achiote|aderezo|aji|aji molido|ajonjoli|albahaca seca|almendras|altramuz|aluminio|ancho|arroz|arroz blanco|arroz integral|arroz precocido|ate|ate de guayaba|ate de membrillo|atun|atun en lata|avena|avena instantanea|azafran|azucar|azucar blanca|azucar glass|azucar mascabado|azucar morena|azucar para hornear|barra cereal|bicarbonato|bicarbonato de sodio|cajeta de celaya|cajeta de leite|caldillo|caldo de pollo|caldo de res|caldo de tomate|caldo res|caldo verduras|canela|canela en rama|canela molida|cascabel|catsup|cereal|chia|chile de arbol molido|chile en polvo|chile piquin|chiles en escabeche|chiles en lata|chiles en vinagre|chiles secos|chipotle|chipotle en adobo|chocolate cocina|chocolate en polvo|chocolate polvo|clavo|clavo de olor|clavos de olor|coditos|comino|comino molido|cominos|condimentos|consome|consome de pollo|consome polvo|crema de cacahuate|crema de mani|cubito de caldo|dulce de coco|dulce de guayaba|dulce de leche|dulce de membrillo|edulcorante|elote en lata|elote enlatado|endulzante|envoltura de plastico|esencia de vainilla|espagueti|especias|extracto de vainilla|fideo|film transparente|frijol|frijol bayo|frijol negro|frijol peruano|frijol pinto|frijol refrito|frijoles|frijoles bayos|frijoles negros|frijoles refritos|fruta enlatada|galletas maria|galletas saladas|garbanzo|garbanzos|granola|grenetina|guajillo|haba|habas|harina|harina de maiz|harina de trigo|harina maiz|hojas de laurel|jengibre|ketchup|kleenex|knorr|knorr suiza|lasana|laurel|leche clavel|leche condensada|leche evaporada|lechera|lenteja|lentejas|levadura|macarron|maiz|maiz palomero|maiz pozolero|maizena|manteca|manteca de cerdo|manteca vegetal|maruchan|masa harina|maseca|mayonesa|mayonesa de aceite de oliva|mayonesa light|mayonesa vegana|mermelada|mermelada de durazno|mermelada de fresa|mermelada de guayaba|mermelada de pina|miel|miel abeja|miel agave|miel de abeja|miel de maguey|miel de maple|miel maple|mole|mostaza|mostaza amarilla|mostaza de grano|mostaza dijon|nixtamal|nuez moscada|nuez moscada molida|nutella|oregano|oregano seco|panela|papel para hornear|pasas|pasilla|pasta|piloncillo|pimienta|pimienta blanca|pimienta cayena|pimienta de jamaica|pimienta entera|pimienta gorda|pimienta molida|pimienta negra|pimienta negra entera|plastico transparente|pollo en polvo|polvo para hornear|pure de tomate|res en polvo|romero seco|royal|sal|sal de grano|sal de mar|sal de mesa|sal kosher|sal marina|sal sin yodo|sal yodada|salmon en lata|salsa|salsa botanera|salsa botella|salsa de soya|salsa de tomate|salsa inglesa|salsa macha|salsa maggi|salsa picante|salsa valentina|sardina|sardina en lata|sardinas|servilleta|sopa|sopa arroz|sopa de letra|sopa de pasta|sopa pasta|spaghetti|stevia|sustituto de azucar|tajin|tomate en polvo|tomillo|tomillo seco|vainilla|vegetales enlatados|verduras en lata|vinagre|vinagre balsamico|vinagre blanco|vinagre de arroz|vinagre de manzana|vinagre de vino|vinagre tinto|vino cocina|zucaritas\nBOT: almendra|barritas|botana|bubulubu|cacahuates|cacahuates japoneses|cajeta|caramelos|carlos v|cheetos|chicharron|chicharrones|chicle|chicles|chitos|chocokrispis|chocolate|chocolate abuelita|chocolate barra|chocolate canela|churro|churros|doritos|dulce|dulce leche|dulces|duvalin|emperador|esquites|ferrero|flan|frituras|fruta seca|galleta dulce|galleta salada|galletas|galletas dulces|galletas marias|gansito|gelatina|gomitas|halls|helado|jericalla|kinder delice|kit kat|lucas|m m|maria|mazapan|mentos|miguelito|milky way|nacho|nieve|nieves|nueces|nuez|nuez de la india|nuez pecana|oreo|paleta|paletas|palomitas|palomitas microondas|panditas|papas|papas fritas|papitas|pelon pelo rico|pepitas|pinguino|pinguinos|pistache|pistaches|postre|pulparindo|rancheritos|ruffles|rufles|sabritas|semilla calabaza|semilla girasol|semillas|skittles|skwinkles|snickers|takis|tamarindo dulce|tostitos|totopos|trident|vero\nBEB: ades|agua|agua de coco|agua de jamaica|agua de sabor|agua de tamarindo|agua embotellada|agua fresca|agua mineral|agua natural|agua purificada|bacardi|bebida deportiva|boing|bonafont|brandy|cafe|cafe soluble|caguama|cerveza|cerveza corona|cervezas|champagne|chelas|cheves|chocolate leche|ciel|clamato|coca|coca cola|cognac|corona|del valle|energetica|epura|fanta|fresca|gatorade|ginebra|horchata|indio|jarritos|jugo|jugo concentrado|jugo de manzana|jugo de naranja|jugo de uva|jugo mango|jugo pina|jugo uva|jugo verde|jumex|kombucha|kool aid|leche en polvo|leche saborizada|licor|limonada|manzanita|mezcal|modelo|monster|naranjada|nescafe|pacifico|penafiel|pepsi|ponche|pulque|red bull|redbull|refresco|refrescos|rompope|ron|sidra|sidral|soda|sol|sprite|sq|tang|te|te de manzanilla|te frio|te helado|tecate|tejuino|tepache|tequila|tinto|valle|victoria|vino|vino blanco|vino tinto|vodka|whisky|zuko\nLIM: aceite para muebles|ajax|ambientador|ambientador automatico|ambientador de aerosol|ambientador de auto|ambientador de bano|ambientador de barras|ambientador de casa|ambientador de closet|ambientador de cocina|ambientador de flores|ambientador de manzana|ambientador de pino|ambientador de vainilla|ambientador electrico|aromatizante|aromatizante de ambiente|aromatizante de auto|aromatizante de bano|aromatizante de closet|aromatizante de cocina|blanqueador|blanqueador en polvo|blanqueador liquido|bolsa de basura|bolsas basura|bolsas de basura|bolsas de basura grandes|bolsas de basura medianas|bolsas de basura negras|bolsas de basura pequenas|bolsas de basura transparentes|bolsas para basura|bolsas para reciclaje|bounty|cera|cera para autos|cera para muebles|cera para pisos|cerillos|cloralex|cloro|cloro en gel|cloro en polvo|cloro liquido|comet|desengrasante|desinfectante|desinfectante de banos|desinfectante de cocina|desinfectante de pisos|desinfectante multiusos|detergente|detergente en polvo|detergente liquido|detergente para lavar platos|detergente para platos|detergente para ropa|detergente para ropa blanca|detergente para ropa de bebe|detergente para ropa de color|detergente para ropa delicada|detergente para trastes|downy|escoba|esponja|esponja de acero|esponja de acero inoxidable|esponja de aluminio|esponja de metal|esponja para cocina|esponja para platos|esponja para trastes|esponjas|estropajo|estropajos|fabuloso|fabuloso multiusos|fibra|fibras|foca|focos|fregadero|glad|guantes|insecticida|jabon|jabon de barra|jabon de lavanderia|jabon de lavar|jabon en polvo|jabon para ropa|jabon para trastes|jaboncillo|jerga|lavatrastes|limpia parabrisas|limpiador|limpiador de banos|limpiador de cocina|limpiador de pisos|limpiador de vidrios|limpiador multiusos|limpiapisos|limpiavidrios|liquido para trastes|lustra muebles|lysol|maestro limpio|panuelo de papel|panuelos de papel|papel aluminio|papel de cocina|papel sanitario|pasta para zapatos|petalo|pinalen|pinalen de pino|pino|pinol|pinol aplas|pinol de pino|plasticos|recogedor|regio|rollos de papel|salvo|scotch brite|servilleta de papel|servilletas|servilletas de papel|shampoo para trastes|suavitel|suavizante|suavizante con aroma|suavizante de ropa|suavizante de telas|suavizante para ropa|toalla de papel|toallas de papel|trapeador|trapero|trapo|trapo de algodon|trapo de cocina|trapo de microfibra|trapo para cocina|trapo para limpiar|trapos|velas\nHIG: aceite de bebe|aceite para cuticulas|acetona|acondicionador|acondicionador de almendras|acondicionador de argan|acondicionador de cabello|acondicionador de coco|acondicionador de keratina|acondicionador de pina|acondicionador para cabello|acondicionador para cabello danado|acondicionador para cabello graso|acondicionador para cabello seco|acondicionador para cabello tenido|aftershave|agua micelar|algodon en bolas|algodon en rollos|base para unas|bastoncillos|bastoncillos de algodon|bloqueador|bloqueador solar|cepillo|cepillo de dientes|cepillo de dientes electrico|cepillo de dientes manual|cepillo dental|cepillo dientes|cepillo pelo|cera para cabello|champu|colgate|colonia|colonia para adultos|colonia para bebe|colonia para ninos|colutorio|compotas|condon|condon con espermicida|condon con retardante|condon con sabores|condon con texturas|condon femenino|condon masculino|contorno de ojos|copa menstrual|copa para menstruacion|corta unas|cortador de unas|cortaunas|cotonetes|cottonetes|crema|crema antiarrugas|crema antiedad|crema corporal|crema de afeitar|crema de ojos|crema hidratante|crema humectante|crema para cara|crema para cuerpo|crema para cuticulas|crema para manos|crema para ojos|crema para peinar|crema para piel|crema para pies|dentifrico|desmaquillante|desmaquillante bifasico|desmaquillante de ojos|desmaquillante en agua|desmaquillante en crema|desodorante|desodorante antitranspirante|desodorante de pies|desodorante en aerosol|desodorante en barra|desodorante en crema|desodorante para axilas|desodorante roll on|desodorante sin alcohol|endurecedor de unas|enjuague bucal|enjuague bucal con alcohol|enjuague bucal sin alcohol|esencia|esmalte|esmalte de unas|espuma|espuma afeitar|espuma de afeitar|espuma para peinar|essence|fortalecedor de unas|fragancia|gel|gel antibacterial|gel de afeitar|gel de bano|gel de piel|gel para cabello|gel para peinar|gillette|hilo dental|hilo dental con fluor|hilo dental de menta|hisopos|hisopos de algodon|hojas de afeitar|hojas para afeitar|jabon corporal|jabon cuerpo|jabon de afeitar|jabon de bano|jabon de piel|jabon de tocador|jabon liquido|kotex|laca|laca para cabello|liga|lima de unas|lima para callos|lima para pies|lima para unas|listerine|locion|locion para piel|lubricante con aroma|lubricante con sabor|lubricante intimo|lubricante para relaciones|lubricante sin aroma|lubricante sin sabor|maquillaje|maquinilla de afeitar|maquinilla de afeitar electrica|maquinilla de afeitar manual|mouse|mouse para cabello|navaja de afeitar|navajas|palmolive|pantiprotector|panuelos|papel de bano|papel higienico|pasta de dientes|pasta de dientes blanqueadora|pasta de dientes para dientes sensibles|pasta dental|perfume|perfume para hombre|perfume para mujer|perfume unisex|piedra para pies|piedra pomez|pinta unas|pintaunas|pomada para cabello|preservativo|preservativo femenino|preservativo masculino|protector diario|protector solar|protector solar con aroma|protector solar con color|protector solar infantil|protector solar para bebe|protector solar para cara|protector solar para cuerpo|protector solar sin aroma|protector solar sin color|q tips|quitaesmalte|rastrillo|rastrillos|rasuradora|removedor de esmalte|rexona|rimel|saba|shampoo|shampoo anticaspa|shampoo para cabello|shampoo para cabello con caspa|shampoo para cabello con resequedad|shampoo para cabello danado|shampoo para cabello graso|shampoo para cabello mixto|shampoo para cabello normal|shampoo para cabello seco|shampoo para cabello tenido|shampoo para cabellos|shampoo para caida del cabello|speed stick|spray para pies|talco corporal|talco de bebe|talco para adultos|talco para bebe|talco para pies|tampon|tampones|tampones con aplicador|tampones de algodon|tampones sin aplicador|tijeras para unas|tinte|toalla femenina|toalla para menstruacion|toalla sanitaria|toallas femeninas|toallas humedas|toallas intimas|toallas sanitarias|toallitas intimas|tonico facial|tonico para piel|top coat para unas|vaselina\nFAR: agua oxigenada|alcohol|alcohol etilico|alcohol isopropilico|algodon|ambroxol|amoxicilina|amoxicilina pediatrica|analgesicos|antidiarreico|antigripal|antihistaminico|aspirina|aspirina infantil|aspirina protect|azitromicina|bacitracina|banditas|bisolvon|bisolvon jarabe|buscapina|buscapina compuesta|buscopan|caolin|caolin con pectina|cefalexina|cetirizina|cinta adhesiva|claritromicina|clenbuterol|clorfenamina|clorfeniramina|clorhexidina|clotrimazol|compresa caliente|compresa fria|condones|crema antibiotica|crema antifungica|crema quemaduras|cubrebocas|cubrebocas n95|cubrebocas quirurgico|curitas|desloratadina|dexametasona|dextrometorfano|diclofenaco|diclofenaco capsulas|diclofenaco gotas|diclofenaco potasico|diclofenaco sodico|diclofenaco tabletas|difenhidramina|dimenhidrinato|dramamin|electrolit|espadrapo|espumisan|fenilefrina|fexofenadina|gasas|gasas esteriles|glucosimetro|gotas oculares|gotas para los ojos|gravol|guaifenesina|hidroxizina|ibuprofeno|ibuprofeno capsulas|ibuprofeno gotas|ibuprofeno infantil|ibuprofeno pediatrico|ibuprofeno tabletas|iodo|jarabe para la tos|jarabe tos|ketoconazol|ketotifeno|ketotifeno oftalmico|lactulosa|lagrimas artificiales|lansoprazol|loperamida|loratadina|mascarilla|mascarilla kn95|mascarilla n95|mascarilla quirurgica|mejoral|mejoralito|metamizol|metamizol sodico|metronidazol|miconazol|micropore|naproxeno|naproxeno sodico|nebulizador|neomicina|omeprazol|omeprazol pediatrico|oximetazolina|oximetro|oximetro de pulso|panal para adulto|panales para adultos|pantoprazol|paracetamol|paracetamol capsulas|paracetamol comprimidos|paracetamol gotas|paracetamol infantil|paracetamol pediatrico|paracetamol tabletas|pastillas para la garganta|pastillas para la tos|pectina|penicilina|penicilina pediatrica|peroxido de hidrogeno|polietilenglicol|polimixina|pomada antibiotica|povidona yodada|preservativos|pseudoefedrina|ranitidina|salbutamol|silla de ruedas|simeticona|spray nasal|suero|suero casero|suero fisiologico|suero oral|suero para bebe|suero para ninos|suero pediatrico|suerox|sulfadiazina de plata|tabcin|tabcin active|tabcin antigripal|tabcin pm|tela adhesiva|tempra|tempra infantil|termometro|tiras reactivas|tolnaftato|vendas|vick|vick vaporub|vitamina c|vitaminas\nBBE: aceite infantil|aceite para bebe|aceite para bebes|algodon hidrofilo|algodon para bebe|algodon para bebes|analgesico para bebe|antecesor|antialergico para bebe|antiinflamatorio para bebe|antipiretico para bebe|babero|bastoncillos para bebe|bastoncillos para bebes|biberon|biberon anticolico|biberon con tetina|biberon de plastico|biberon de vidrio|biberones|carne para bebe|cereal infantil|cereal para bebe|cereal para lactantes|cerelac|champu para bebe|champu para bebes|chupeta|chupetas|chupete|chupetes|chupon|chupon para bebe|chupones|chupones para bebe|comida infantil|comida para bebe|comida para lactantes|crema hidratante para bebe|crema humectante para bebe|crema para bebes|crema para irritacion|crema para panal|crema para panalitis|crema para rozaduras|curitas para bebe|curitas para bebes|formula|formula infantil|formula para bebe|formula para lactantes|formula para recien nacido|formula para recien nacidos|formulas|frasco|frasco de plastico|frasco de vidrio|frascos|fruta para bebe|gasa para bebe|gasa para bebes|gerber|glucosimetro para bebe|hisopos para bebe|hisopos para bebes|huggies|jabon de bano para bebes|jabon para bebe|jabon para bebes|jarabe para bebe|jarabe para bebes|jarabe para la tos para bebe|jarabe para la tos para bebes|juguete para bebe|leche de continuacion|leche de crecimiento|leche de transicion|leche en polvo infantil|leche en polvo para bebe|leche formula|leche materizada|leche materna|leche nido|leche para bebe|locion para bebe|locion para bebes|mamadera|mamadera con tetina|mamadera de plastico|mamadera de vidrio|mamaderas|mameluco|mamila|mamilas|medicamentos infantiles|medicamentos para bebe|nan|pampers|panal|panal desechable|panales|panales de entrenamiento|panales de tela|panales desechables|panales diurnos|panales nocturnos|panales para bebe|panales para bebe de nina|panales para bebe de nino|panales para bebes|panales para ninas|panales para ninos|panales para prematuros|panales para recien nacido|panales para recien nacidos|panales recien nacido|papilla|papilla de arroz|papilla de avena|papilla de cereal|papilla de fruta|papilla de maiz|papilla de verdura|papillas|pavo para bebe|pescado para bebe|pollo para bebe|pomada para irritacion|pomada para panalitis|pure|shampoo para bebe|shampoo para bebes|talco|talco para bebes|talco para panal|termometro de oido para bebe|termometro digital para bebe|termometro infrarrojo para bebe|termometro para bebe|termometro para bebes|termometro rectal para bebe|termometro temporal para bebe|tetina|tetinas|toallas para bebe|toallitas desechables|toallitas humedas|toallitas para bebe|toallitas para bebes|toallitas para cambio|toallitas para cambio de panal|toallitas para limpiar|vendas para bebe|vendas para bebes|verdura para bebe\nMAS: alimento de gato|alimento de perro|alimento gato|alimento humedo para gato|alimento humedo para mascotas|alimento humedo para perro|alimento para gato|alimento para mascotas|alimento para perro|alimento peces|alimento perro|alimento seco para gato|alimento seco para mascotas|alimento seco para perro|antiparasitario|antipulgas|arena aglomerante|arena de papel|arena de silice|arena gato|arena para gato|arena para gatos|arena sanitaria|bebedero para gato|bebedero para mascotas|bebedero para perro|cama para gato|cama para mascotas|cama para perro|carnaza|cat chow|cepillo para gato|cepillo para mascotas|cepillo para perro|chamarra para perro|collar|collar antipulgas|collar para gato|collar para mascotas|collar para perro|comida para gato|comida para perro|correa|correa para mascotas|correa para perro|croquetas|croquetas para gato|croquetas para gatos|croquetas para mascotas|croquetas para perro|croquetas para perros|desodorante para mascotas|desparasitante|desparasitante para gato|desparasitante para perro|dog chow|golosinas para gato|golosinas para mascotas|golosinas para perro|hueso|hueso de cuero|hueso de plastico|hueso para perro|huesos perro|jabon para gato|jabon para mascotas|jabon para perro|jaula para gato|jaula para mascotas|jaula para perro|juguete|juguete para gato|juguete para gatos|juguete para mascota|juguete para mascotas|juguete para perro|juguete para perros|juguetes perro|lata para gato|lata para mascotas|lata para perro|latas para gato|latas para mascotas|latas para perro|latitas de gato|panal para perro|panales para perro|pastilla antipulgas|pedigree|pipeta antipulgas|plato para gato|plato para mascotas|plato para perro|premios para gato|premios para perro|purina|ropa para mascotas|ropa para perro|shampoo para gato|shampoo para mascota|shampoo para mascotas|shampoo para perro|sobre gato|sobre perro|spray para mascotas|sueter para perro|suplementos para gato|suplementos para perro|toallitas para gato|toallitas para mascotas|toallitas para perro|transportadora para gato|transportadora para mascotas|vitaminas para gato|vitaminas para perro|whiskas\n";
 </script>
 <script>
@@ -795,6 +829,55 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
   var RELAY = isLocalDev ? 'ws://127.0.0.1:8787' : (typeof LISTO_RELAY === 'string' ? LISTO_RELAY : '');
 
   function emptyState(title) { return { meta: { title: title || 'LISTA', timestamp: 0 }, items: [], ovr: {} }; }
+  // Every edit must beat the version it was made on, even if this phone's clock is behind.
+  function bump(old) { return Math.max(now(), (old || 0) + 1); }
+  var TOMBSTONE_DAYS = 60;    // deleted items are forgotten after this; keeps shared lists small forever
+  var ID_RE = /^[A-Za-z0-9-]{1,40}$/, KEY_RE = /^[a-z0-9 .\/]{1,120}$/;
+
+  // Anything read from storage or the network is checked and trimmed before use.
+  function sanitize(st) {
+    if (!st || typeof st !== 'object') return null;
+    var max = now() + 24 * 3600 * 1000, seen = Object.create(null), items = [];
+    var num = function (v) { v = Number(v); return isFinite(v) && v > 0 ? Math.min(v, max) : 0; };
+    (Array.isArray(st.items) ? st.items : []).forEach(function (i) {
+      if (!i || typeof i !== 'object') return;
+      var id = typeof i.id === 'number' ? String(i.id) : i.id;
+      if (typeof id !== 'string' || !ID_RE.test(id) || seen[id]) return;
+      seen[id] = true;
+      if (i.deleted === true && typeof i.text !== 'string') { items.push({ id: id, deleted: true, timestamp: num(i.timestamp) }); return; }
+      if (typeof i.text !== 'string' || !i.text.trim()) return;
+      var it = { id: id, text: i.text.slice(0, 300), done: !!i.done, deleted: !!i.deleted, timestamp: num(i.timestamp),
+                 created: num(i.created) || num(i.timestamp) };
+      if (typeof i.by === 'string') it.by = i.by.slice(0, 20);
+      items.push(it);
+    });
+    var m = st.meta && typeof st.meta === 'object' ? st.meta : {};
+    var out = { items: items, meta: { title: typeof m.title === 'string' && m.title.trim() ? m.title.slice(0, 120) : 'LISTA',
+                                      timestamp: num(m.timestamp) }, ovr: {} };
+    var known = ListoAisles.AISLES.map(function (a) { return a.id; });
+    if (st.ovr && typeof st.ovr === 'object') Object.keys(st.ovr).slice(0, 3000).forEach(function (k) {
+      var v = st.ovr[k];
+      if (KEY_RE.test(k) && v && known.indexOf(v.aisle) >= 0) out.ovr[k] = { aisle: v.aisle, ts: num(v.ts) };
+    });
+    if (st.order && Array.isArray(st.order.ids)) {
+      out.order = { ids: st.order.ids.filter(function (x) { return known.indexOf(x) >= 0; }), ts: num(st.order.ts) };
+    }
+    return out;
+  }
+  // Forget deletions older than TOMBSTONE_DAYS (a phone offline longer than that could bring one back).
+  function purgeOld(st) {
+    var cutoff = now() - TOMBSTONE_DAYS * 24 * 3600 * 1000;
+    st.items = st.items.filter(function (i) { return !i.deleted || (i.timestamp || 0) > cutoff; });
+    return st;
+  }
+  // What travels to the relay: deleted items shrink to {id, deleted, timestamp}.
+  function wire(st) {
+    var out = Object.assign({}, st);
+    out.items = purgeOld({ items: st.items.slice() }).items.map(function (i) {
+      return i.deleted ? { id: i.id, deleted: true, timestamp: i.timestamp || 0 } : i;
+    });
+    return out;
+  }
   function hints() { return store.get(K.hints, {}); }
   function setHint(k) { var h = hints(); h[k] = true; store.set(K.hints, h); }
 
@@ -818,6 +901,9 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
         map[oldId] = id;
       });
     });
+    var lastOld = null; try { lastOld = localStorage.getItem('last_local_id'); } catch (e) {}
+    var newest = Object.keys(lists).sort(function (a, b) { return (lists[b].lastVisited || 0) - (lists[a].lastVisited || 0); })[0];
+    if (!store.get(K.last) && (map[lastOld] || newest)) store.set(K.last, map[lastOld] || newest);
     store.set(K.index, lists); store.set(K.v1map, map); store.set('ll2_migrated', true);
   }
 
@@ -833,41 +919,54 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
     store.set(K.index, idx);
   }
   function persist() {
+    var stored = sanitize(store.get(K.list(cur.id)));
+    if (stored) cur.state = ListoMerge.merge(cur.state, stored).state;   // another open copy may have saved
+    purgeOld(cur.state);
     store.set(K.list(cur.id), cur.state);
-    touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret || undefined });
+    var e = listIndex()[cur.id];
+    var blank = !cur.state.items.length && !cur.state.meta.timestamp && !cur.secret;
+    if (e || !blank) touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret || undefined });
   }
   function changed(ids) {
     persist();
-    if (cur.relay) cur.relay.put(cur.state);
+    if (cur.relay) cur.relay.put(wire(cur.state));
     render(ids);
   }
 
   function closeCurrent() {
     if (cur.relay) { cur.relay.close(); cur.relay = null; }
+    clearTimeout(snackTimer); snackUndo = null; $('snack').classList.remove('show');   // undo belongs to the old list
     cur = { id: null, secret: null, keys: null, relay: null, state: null, status: 'local' };
   }
 
   function openLocal(id) {
     closeCurrent();
     cur.id = id;
-    cur.state = store.get(K.list(id)) || emptyState();
-    view.aisles = !!(listIndex()[id] || {}).aisles;
+    cur.state = sanitize(store.get(K.list(id))) || emptyState();
+    var e = listIndex()[id] || {};
+    view.aisles = !!e.aisles;
     store.set(K.last, id);
     history.replaceState(null, '', location.pathname + '#l=' + id);
     persist(); setStatus('local'); render(); focusInput();
+    if (e.wasShared && !hints()['ws_' + id]) {
+      showHint('Esta lista antes se compartía. Ahora las listas compartidas son privadas y cifradas: toca Compartir y manda el nuevo enlace a quien la usaba.', 'ws_' + id);
+    }
   }
 
   function openShared(secret) {
     closeCurrent();
     return ListoSync.derive(secret).then(function (keys) {
       cur.id = keys.roomId; cur.secret = secret; cur.keys = keys;
-      cur.state = store.get(K.list(cur.id)) || emptyState();
+      cur.state = sanitize(store.get(K.list(cur.id))) || emptyState();
       view.aisles = !!(listIndex()[cur.id] || {}).aisles;
       store.set(K.last, cur.id);
       history.replaceState(null, '', location.pathname + '#k=' + secret);
-      persist(); render(); focusInput();
       connect();
-    }).catch(function () { toast('Ese enlace no es válido.'); openLocal('l_' + rid(8)); });
+      persist();
+      try { render(); } catch (e) { cur.state = emptyState(); render(); }
+      focusInput();
+      if (isIOS() && !isStandalone()) setTimeout(function () { showInstallHint(false); }, 1500);
+    }, function () { toast('Ese enlace no es válido.'); openLocal('l_' + rid(8)); });
   }
 
   function connect() {
@@ -884,7 +983,8 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
   }
 
   function onRemote(remote) {
-    var before = {};
+    if (remote) { remote = sanitize(remote); if (!remote) return; }
+    var before = Object.create(null);
     cur.state.items.forEach(function (i) { before[i.id] = i.timestamp || 0; });
     var m = ListoMerge.merge(cur.state, remote);
     cur.state = m.state;
@@ -896,7 +996,7 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
       touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret });
       render(ids);
     }
-    if (m.localNewer && cur.relay) cur.relay.put(cur.state);
+    if (m.localNewer && cur.relay) cur.relay.put(wire(cur.state));
   }
 
   function setStatus(s) {
@@ -932,41 +1032,43 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
     input.value = '';
     changed(ids);
     input.focus();
+    var last = document.querySelector('[data-id="' + ids[ids.length - 1] + '"]');
+    if (last && last.getBoundingClientRect().top > (window.visualViewport ? visualViewport.height : innerHeight) - 40) {
+      toast(ids.length > 1 ? 'Añadidos ' + ids.length + ' artículos (abajo)' : 'Añadido: ' + text + ' (abajo)');
+    }
   }
   function find(id) { return cur.state.items.find(function (i) { return i.id === id; }); }
   function toggle(id) {
     var it = find(id); if (!it) return;
-    it.done = !it.done; it.timestamp = now();
+    it.done = !it.done; it.timestamp = bump(it.timestamp);
     changed([id]);
   }
   function remove(id) {
     var it = find(id); if (!it) return;
-    it.deleted = true; it.timestamp = now();
+    it.deleted = true; it.timestamp = bump(it.timestamp);
     changed([]);
-    undo('Borrado: ' + it.text, function () { it.deleted = false; it.timestamp = now(); changed([id]); });
+    undo('Borrado: ' + it.text, function () { it.deleted = false; it.timestamp = bump(it.timestamp); changed([id]); });
   }
   function editText(id, text) {
     var it = find(id); if (!it || !text.trim() || text.trim() === it.text) return;
-    it.text = text.trim(); it.timestamp = now();
+    it.text = text.trim(); it.timestamp = bump(it.timestamp);
     changed([id]);
   }
   function clearDone() {
     var gone = cur.state.items.filter(function (i) { return i.done && !i.deleted; });
     if (!gone.length) return;
-    var t = now();
-    gone.forEach(function (i) { i.deleted = true; i.timestamp = t; });
+    gone.forEach(function (i) { i.deleted = true; i.timestamp = bump(i.timestamp); });
     changed([]);
     undo(gone.length + (gone.length === 1 ? ' tachado borrado' : ' tachados borrados'), function () {
-      var t2 = now(); gone.forEach(function (i) { i.deleted = false; i.timestamp = t2; }); changed([]);
+      gone.forEach(function (i) { i.deleted = false; i.timestamp = bump(i.timestamp); }); changed([]);
     });
   }
   function emptyList() {
     var gone = cur.state.items.filter(function (i) { return !i.deleted; });
     if (!gone.length) return;
-    var t = now();
-    gone.forEach(function (i) { i.deleted = true; i.timestamp = t; });
+    gone.forEach(function (i) { i.deleted = true; i.timestamp = bump(i.timestamp); });
     changed([]);
-    undo('Lista vaciada', function () { var t2 = now(); gone.forEach(function (i) { i.deleted = false; i.timestamp = t2; }); changed([]); });
+    undo('Lista vaciada', function () { gone.forEach(function (i) { i.deleted = false; i.timestamp = bump(i.timestamp); }); changed([]); });
   }
 
   // ---------- aisles (loaded on first use: pay for what you use) ----------
@@ -1002,14 +1104,15 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
   function itemKey(text) { return ListoAisles.stripQuantity(ListoAisles.fold(text)); }
   function setAisle(it, aisleId) {
     cur.state.ovr = cur.state.ovr || {};
-    cur.state.ovr[itemKey(it.text)] = { aisle: aisleId, ts: now() };
+    var k = itemKey(it.text);
+    cur.state.ovr[k] = { aisle: aisleId, ts: bump((cur.state.ovr[k] || {}).ts) };
     changed([it.id]);
   }
   function moveAisle(id, dir) {
     var order = aisleOrder(), i = order.indexOf(id), j = i + dir;
     if (i < 0 || j < 0 || j >= order.length) return;
     order[i] = order[j]; order[j] = id;
-    cur.state.order = { ids: order, ts: now() };
+    cur.state.order = { ids: order, ts: bump((cur.state.order || {}).ts) };
     changed([]);
   }
 
@@ -1029,7 +1132,7 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
 
     var pBox = $('pending'); pBox.textContent = '';
     if (view.aisles) {
-      var idx = aisles(), ov = overrides(), groups = {};
+      var idx = aisles(), ov = overrides(), groups = Object.create(null);
       pending.forEach(function (it) {
         var r = ListoAisles.aisleOf(it.text, idx, ov);
         (groups[r.id] = groups[r.id] || []).push({ it: it, r: r });
@@ -1058,46 +1161,73 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
 
   function row(it, aisle) {
     var r = el('div', 'row' + (it.done ? ' done' : '') + (flashIds[it.id] ? ' flash' : ''));
-    r.setAttribute('role', 'checkbox'); r.setAttribute('aria-checked', it.done ? 'true' : 'false'); r.tabIndex = 0;
-    r.appendChild(el('span', 'txt', it.text));
+    r.dataset.id = it.id;
+    var txt = el('span', 'txt', it.text);
+    txt.setAttribute('role', 'checkbox'); txt.setAttribute('aria-checked', it.done ? 'true' : 'false'); txt.tabIndex = 0;
+    r.appendChild(txt);
     if (aisle) {
       var tag = el('button', 'tag' + (aisle.guess ? ' guess' : ''), aisleName(aisle.id) + (aisle.guess ? '?' : ''));
-      tag.setAttribute('aria-label', 'Cambiar pasillo de ' + it.text);
+      tag.setAttribute('aria-label', 'Cambiar pasillo de ' + it.text + ' (ahora: ' + aisleName(aisle.id) + ')');
       tag.onclick = function (e) { e.stopPropagation(); aislePicker(it, aisle.id); };
+      tag.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       r.appendChild(tag);
     }
-    // tap = strike / unstrike; long-press = edit / delete
+    // tap = strike / unstrike; long-press = edit / delete (one sheet per press, even on Android)
     var timer = null, long = false;
-    r.addEventListener('pointerdown', function () { long = false; timer = setTimeout(function () { long = true; itemSheet(it); }, 550); });
+    var openSheet = function () { if (long) return; long = true; clearTimeout(timer); itemSheet(it); };
+    r.addEventListener('pointerdown', function () { long = false; clearTimeout(timer); timer = setTimeout(openSheet, 550); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { r.addEventListener(ev, function () { clearTimeout(timer); }); });
-    r.addEventListener('contextmenu', function (e) { e.preventDefault(); if (!long) { long = true; itemSheet(it); } });
-    r.addEventListener('click', function () { if (long) { long = false; return; } toggle(it.id); maybeLongPressHint(); });
-    r.addEventListener('keydown', function (e) {
+    r.addEventListener('contextmenu', function (e) { e.preventDefault(); openSheet(); });
+    r.addEventListener('click', function (e) {
+      if (e.target.closest('.tag')) return;
+      if (long) { long = false; return; }
+      toggle(it.id); maybeLongPressHint();
+    });
+    txt.addEventListener('keydown', function (e) {
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(it.id); }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(it.id); }
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); itemSheet(it); }
     });
     return r;
   }
 
   // ---------- sheets (menu, lists, item actions, aisle picker, aisle order) ----------
+  var closeOpenSheet = null;
+  window.addEventListener('popstate', function () { if (closeOpenSheet) closeOpenSheet(true); });
   function sheet(build) {
+    if (closeOpenSheet) closeOpenSheet();
     var bg = el('div', 'sheet-bg'), s = el('div', 'sheet');
-    s.setAttribute('role', 'dialog');
+    s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true');
     bg.appendChild(s);
-    var close = function () { bg.remove(); document.removeEventListener('keydown', esc); };
+    var closed = false;
+    var close = function (fromBack) {
+      if (closed) return; closed = true; closeOpenSheet = null;
+      bg.remove(); document.removeEventListener('keydown', esc);
+      // leave the extra history entry harmless (Back then stays on this list)
+      if (!fromBack && history.state && history.state.sheet) history.replaceState(null, '', location.href);
+    };
     var esc = function (e) { if (e.key === 'Escape') close(); };
     bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
     document.addEventListener('keydown', esc);
+    var x = el('button', 'sheet-close', 'Cerrar');
+    x.onclick = function () { close(); };
+    s.appendChild(x);
     build(s, close);
+    history.pushState({ sheet: true }, '', location.href);   // Back closes the sheet instead of leaving
+    closeOpenSheet = close;
     document.body.appendChild(bg);
-    var first = s.querySelector('input, button'); if (first && first.tagName === 'INPUT') first.focus();
+    var first = s.querySelector('input') || s.querySelector('.opt, .aisle-grid button, .order-row button');
+    if (first) first.focus();
     return close;
   }
   function opt(label, onClick, extra) {
     var b = el('button', 'opt' + (extra && extra.warn ? ' warn' : ''));
     b.appendChild(el('span', '', label));
     if (extra && extra.small) b.appendChild(el('small', '', extra.small));
-    if (extra && extra.sw != null) b.appendChild(el('span', 'switch' + (extra.sw ? ' on' : '')));
+    if (extra && extra.sw != null) {
+      b.appendChild(el('span', 'switch' + (extra.sw ? ' on' : '')));
+      b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', extra.sw ? 'true' : 'false');
+    }
     b.onclick = onClick;
     return b;
   }
@@ -1112,7 +1242,11 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
       s.appendChild(opt('Mis listas', function () { close(); listsSheet(); }));
       s.appendChild(opt('Nueva lista', function () { close(); openLocal('l_' + rid(8)); }));
       if (installPrompt) s.appendChild(opt('Instalar como app', function () { close(); installPrompt.prompt(); installPrompt = null; }));
-      else if (isIOS() && !isStandalone()) s.appendChild(opt('Usar como app', function () { close(); showInstallHint(true); }));
+      else if (isIOS() && !isStandalone()) s.appendChild(opt('Usar como app', function () {
+        close();
+        if (cur.secret) showInstallHint(true);
+        else showHint('En iPhone, primero toca Compartir: el ícono de inicio debe crearse desde el enlace de la lista para que la abra.', null);
+      }));
       s.appendChild(opt('Vaciar la lista', function () { close(); emptyList(); }, { warn: true }));
     });
   }
@@ -1237,14 +1371,17 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
   }
   var isIOS = function () { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); };
   var isStandalone = function () { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; };
-  function showInstallHint(force) {
-    if (!force && hints().install) return;
+  function showHint(text, key) {
     var h = $('hint');
     h.textContent = '';
-    h.appendChild(el('div', '', 'Para tenerla como app en tu iPhone: toca Compartir (el cuadro con la flecha) y luego «Agregar a inicio». Hazlo desde esta lista para que el ícono la abra.'));
+    h.appendChild(el('div', '', text));
     var ok = el('button', '', 'Entendido');
-    ok.onclick = function () { setHint('install'); h.classList.remove('show'); };
+    ok.onclick = function () { if (key) setHint(key); h.classList.remove('show'); };
     h.appendChild(ok); h.classList.add('show');
+  }
+  function showInstallHint(force) {
+    if (!force && hints().install) return;
+    showHint('Para tenerla como app en tu iPhone: en Safari toca Compartir (el cuadro con la flecha; si no lo ves, toca ⋯ junto a la dirección) y elige «Agregar a inicio». Hazlo con esta lista abierta para que el ícono la abra.', 'install');
   }
   var installPrompt = null;
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installPrompt = e; });
@@ -1260,11 +1397,10 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
     ['i1', 'i2'].forEach(function (id) {
       var inp = $(id);
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addFrom(inp); } });
-      inp.addEventListener('blur', function () { if (inp.value.trim()) addFrom(inp); });
     });
     var title = $('title'), titleTimer = null;
     title.addEventListener('input', function () {
-      cur.state.meta = Object.assign({}, cur.state.meta, { title: title.textContent.trim() || 'LISTA', timestamp: now() });
+      cur.state.meta = Object.assign({}, cur.state.meta, { title: (title.textContent.trim() || 'LISTA').slice(0, 120), timestamp: bump(cur.state.meta.timestamp) });
       clearTimeout(titleTimer);
       titleTimer = setTimeout(function () { changed([]); }, 400);
     });
@@ -1279,9 +1415,21 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
     window.addEventListener('hashchange', function () { start(); });
     // After the phone sleeps, always open a fresh connection (sockets die silently in the background).
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && cur.relay) cur.relay.reconnectNow();
+      if (document.visibilityState !== 'visible') return;
+      if (cur.relay) cur.relay.reconnectNow();
+      else if (cur.id) { var st = sanitize(store.get(K.list(cur.id))); if (st) { cur.state = ListoMerge.merge(cur.state, st).state; render(); } }
     });
-    window.addEventListener('pagehide', function () { if (cur.id) store.set(K.list(cur.id), cur.state); });
+    window.addEventListener('online', function () { if (cur.relay) cur.relay.reconnectNow(); });
+    // Another open copy of the app (tab or installed app) saved this list: merge it in.
+    window.addEventListener('storage', function (e) {
+      if (!cur.id || e.key !== K.list(cur.id) || !e.newValue) return;
+      var st; try { st = sanitize(JSON.parse(e.newValue)); } catch (err) { return; }
+      if (!st) return;
+      var m = ListoMerge.merge(cur.state, st);
+      cur.state = m.state;
+      if (m.changed) render();
+    });
+    window.addEventListener('pagehide', function () { if (cur.id) persist(); });
     window.addEventListener('resize', layout);
   }
 
@@ -1294,6 +1442,7 @@ var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One li
     if (k) return openShared(k);
     var old = q.get('room') || q.get('local'), v1 = store.get(K.v1map, {});
     if (old && v1[old]) { history.replaceState(null, '', location.pathname); return openLocal(v1[old]); }
+    if (old) { history.replaceState(null, '', location.pathname); setTimeout(function () { toast('Esa lista no está en este teléfono. Pide un enlace nuevo.'); }, 300); }
     if (l && store.get(K.list(l))) return openLocal(l);
     var last = store.get(K.last), e = last && listIndex()[last];
     if (e) return e.secret ? openShared(e.secret) : openLocal(last);

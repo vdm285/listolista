@@ -8,7 +8,16 @@
 <meta name="description" content="La lista más simple: escribe, comparte con un enlace y táchala en el súper.">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
-<link rel="manifest" href="manifest.webmanifest">
+<script>
+  // iPhone: no start_url, so a home-screen icon opens the list it was added from (its storage is separate).
+  // Android: start_url "./" (the icon opens the last list; the secret in the link never goes into the manifest).
+  (function () {
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var l = document.createElement('link'); l.rel = 'manifest';
+    l.href = ios ? 'manifest.webmanifest' : 'manifest-android.webmanifest';
+    document.head.appendChild(l);
+  })();
+</script>
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="ListoLista">
@@ -39,7 +48,7 @@
   }
   .bar { height: var(--bar); display: flex; align-items: center; gap: 4px; }
   #title {
-    flex: 1; min-width: 0; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase;
+    flex: 1; min-width: 0; font-weight: 700; font-size: 16px; letter-spacing: .05em; text-transform: uppercase;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: none; padding: 6px 2px;
   }
   #title:focus { border-bottom: 1px dashed var(--ink); text-overflow: clip; }
@@ -57,13 +66,13 @@
     position: absolute; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
-  .slot { display: flex; align-items: center; min-height: var(--row); border-bottom: 1px solid var(--dim); padding: 0 16px; }
+  .slot { display: flex; align-items: center; min-height: var(--row); border-bottom: 1px solid var(--dim); padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); }
   .slot input { width: 100%; border: 0; outline: none; background: transparent; color: var(--ink); font: 17px var(--font); padding: 14px 0; }
   .slot input::placeholder { color: var(--muted); }
 
   .row {
     display: flex; align-items: center; gap: 10px; min-height: var(--row); border-bottom: 1px solid var(--dim);
-    padding: 6px 12px 6px 16px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
+    padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
   }
   .row .txt { flex: 1; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
   .row.done .txt { text-decoration: line-through; color: var(--muted); }
@@ -83,12 +92,13 @@
     width: 100%; max-width: 520px; background: var(--bg); border-top: 2px solid var(--ink); border-radius: 16px 16px 0 0;
     padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px)); max-height: 80vh; overflow-y: auto;
   }
+  .sheet-close { display: block; margin: 2px 4px 0 auto; padding: 10px 12px; font-size: 15px; color: var(--muted); text-decoration: underline; }
   .sheet h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 10px 12px 6px; }
   .opt { width: 100%; text-align: left; padding: 14px 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 16px; }
   .opt:active { background: var(--dim); }
   .opt small { color: var(--muted); font-size: 13px; }
   .opt.warn { color: var(--warn); }
-  .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--dim); position: relative; flex: none; }
+  .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--dim); border: 1.5px solid var(--muted); position: relative; flex: none; }
   .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
   .switch.on { background: var(--done); } .switch.on::after { left: 19px; }
   .aisle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px 8px 8px; }

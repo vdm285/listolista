@@ -75,39 +75,52 @@ var ListoSync = (function () {
   // onStatus('connecting'|'online'|'offline'); onError(code).
   function Relay(baseUrl, keys, handlers) {
     var self = this;
-    var ws = null, v = 0, synced = false, pending = null, sending = false, closed = false;
-    var retry = 0, hb = null, pongTimer = null, retryTimer = null;
+    var ws = null, v = 0, synced = false, pending = null, lastSent = null, sending = false, closed = false;
+    var retry = 0, hb = null, pongTimer = null, retryTimer = null, sendTimer = null;
     var status = function (s) { if (handlers.onStatus) handlers.onStatus(s); };
 
     function connect() {
       if (closed) return;
       clearTimeout(retryTimer);
       status('connecting');
-      try { ws = new WebSocket(baseUrl.replace(/\/$/, '') + '/r/' + keys.roomId); }
+      var sock;
+      try { sock = new WebSocket(baseUrl.replace(/\/$/, '') + '/r/' + keys.roomId); }
       catch (e) { return schedule(); }
-      ws.onopen = function () { retry = 0; status('online'); heartbeat(); };
-      ws.onmessage = function (e) {
+      ws = sock;
+      // Every handler first checks that its socket is still the current one (old sockets are ignored).
+      sock.onopen = function () { if (sock !== ws) return; retry = 0; status('online'); heartbeat(); };
+      sock.onmessage = function (e) {
+        if (sock !== ws || closed) return;
         if (e.data === 'pong') { clearTimeout(pongTimer); return; }
         var m; try { m = JSON.parse(e.data); } catch (err) { return; }
         if (m.t === 'snap' || m.t === 'conflict') {
+          clearTimeout(sendTimer);
           v = m.v; synced = true; sending = false;
+          if (m.t === 'snap' && lastSent && m.blob === lastSent) lastSent = null;   // our own change came back: done
           var done = function () { flush(); };
           if (m.blob) {
-            open(keys, m.blob).then(function (st) { handlers.onRemote(st); }, function () {
+            open(keys, m.blob).then(function (st) { if (sock === ws && !closed) handlers.onRemote(st); }, function () {
               if (handlers.onError) handlers.onError('decrypt');
             }).then(done);
           } else { handlers.onRemote(null); done(); }   // nothing stored yet: the app may upload
         } else if (m.t === 'err') {
+          clearTimeout(sendTimer);
           sending = false;
+          if (m.code === 'slow_down' && lastSentState) { pending = pending || lastSentState; setTimeout(flush, 3000); }
           if (handlers.onError) handlers.onError(m.code);
         }
       };
-      ws.onclose = function () { stopHeartbeat(); synced = false; sending = false; status('offline'); schedule(); };
-      ws.onerror = function () { try { ws.close(); } catch (e) {} };
+      sock.onclose = function () {
+        if (sock !== ws) return;
+        stopHeartbeat(); clearTimeout(sendTimer); synced = false;
+        if (sending && lastSentState) pending = pending || lastSentState;   // resend after reconnect
+        sending = false; status('offline'); schedule();
+      };
+      sock.onerror = function () { if (sock === ws) { try { sock.close(); } catch (e) {} } };
     }
     function schedule() {
       if (closed) return;
-      var ms = Math.min(15000, 1000 * Math.pow(2, retry++));
+      var ms = Math.min(8000, 1000 * Math.pow(2, retry++));
       retryTimer = setTimeout(connect, ms);
     }
     function heartbeat() {
@@ -116,18 +129,23 @@ var ListoSync = (function () {
         if (!ws || ws.readyState !== 1) return;
         ws.send('ping');
         clearTimeout(pongTimer);
-        pongTimer = setTimeout(function () { try { ws.close(); } catch (e) {} }, 10000);
-      }, 25000);
+        pongTimer = setTimeout(function () { self.reconnectNow(); }, 8000);
+      }, 20000);
     }
     function stopHeartbeat() { clearInterval(hb); clearTimeout(pongTimer); }
 
     // Send the newest local state once the relay has told us its current version.
+    var lastSentState = null;
     function flush() {
       if (!pending || sending || !synced || !ws || ws.readyState !== 1) return;
-      var st = pending; pending = null; sending = true;
+      var st = pending, sock = ws; pending = null; sending = true;
       seal(keys, st).then(function (blob) {
-        if (!ws || ws.readyState !== 1) { pending = pending || st; sending = false; return; }
-        ws.send(JSON.stringify({ t: 'put', base: v, blob: blob, tok: keys.tok }));
+        if (sock !== ws || sock.readyState !== 1) { pending = pending || st; sending = false; return; }
+        lastSent = blob; lastSentState = st;
+        sock.send(JSON.stringify({ t: 'put', base: v, blob: blob, tok: keys.tok }));
+        // No answer within 6 s: the connection is probably dead even if it looks open.
+        clearTimeout(sendTimer);
+        sendTimer = setTimeout(function () { if (sock === ws && sending) self.reconnectNow(); }, 6000);
       });
     }
 
@@ -135,11 +153,17 @@ var ListoSync = (function () {
     self.reconnectNow = function () {   // e.g. when the phone wakes up: always a fresh connection
       if (closed) return;
       retry = 0;
-      if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
-      stopHeartbeat(); synced = false; sending = false;
+      var old = ws; ws = null;
+      if (old) { try { old.close(); } catch (e) {} }
+      stopHeartbeat(); clearTimeout(sendTimer); clearTimeout(retryTimer);
+      if (sending && lastSentState) pending = pending || lastSentState;
+      synced = false; sending = false;
       connect();
     };
-    self.close = function () { closed = true; stopHeartbeat(); clearTimeout(retryTimer); if (ws) try { ws.close(); } catch (e) {} };
+    self.close = function () {
+      closed = true; stopHeartbeat(); clearTimeout(retryTimer); clearTimeout(sendTimer);
+      var old = ws; ws = null; if (old) try { old.close(); } catch (e) {}
+    };
     self.version = function () { return v; };
     connect();
   }

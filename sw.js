@@ -1,8 +1,8 @@
 // ListoLista offline cache (service worker). Built into ./sw.js by tools/build.py.
 // App shell: serve from cache at once, refresh it in the background (new versions show on the next open).
 // The list itself lives in the phone's storage; sync traffic goes to the relay and is never cached.
-var CACHE = 'listolista-558168efb4';
-var SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png',
+var CACHE = 'listolista-5360f1913b';
+var SHELL = ['./', './index.html', './manifest.webmanifest', './manifest-android.webmanifest', './icons/icon-192.png',
              './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
