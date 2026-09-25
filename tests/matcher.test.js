@@ -117,5 +117,19 @@ eq('override other items unaffected', id('aguacate', { 'pan molido': 'PAN' }), '
 eq('aisles order', (A.AISLES || []).map(function (a) { return a.id; }).join(' '),
    'FRU PAN CAR LAC CON DES BOT BEB LIM HIG FAR BBE MAS OTR');
 
+// regressions found in the senior review of the first implementation (2026-09-25)
+var ridx = A.buildIndex({ FRU: ['lechuga', 'aguacate'], CAR: ['pechuga'], BEB: ['agua'] });
+var before = JSON.stringify(ridx);
+eq('typo before ambiguity', A.aisleOf('lechugs', ridx).id, 'FRU');
+eq('ambiguous typo', A.aisleOf('mechuga', ridx).id, 'OTR');
+eq('same typo after an ambiguous one', A.aisleOf('lechugs', ridx).id, 'FRU');
+eq('aisleOf never changes the index', JSON.stringify(ridx), before);
+eq('item named constructor', A.aisleOf('constructor', ridx, {}).id, 'OTR');
+eq('item named toString', A.aisleOf('toString', ridx).id, 'OTR');
+eq('number glued to a word stays', A.stripQuantity('7up'), '7up');
+eq('7up item', A.aisleOf('7up', ridx).id, 'OTR');
+var g = A.aisleOf('aguacte', ridx);
+eq('typo guess reports the term', [g.id, g.term, g.guess], ['FRU', 'aguacate', true]);
+
 print(pass + ' passed, ' + fail + ' failed');
 if (fail > 0) throw new Error(fail + ' test(s) failed');
