@@ -34,22 +34,20 @@ Rollout by checkpoints (each one used and trusted before the next):
 6. **Zero running cost** for Victor.
 7. Spanish first (English when it goes public).
 
-## Current state (2026-09-25, `main` = 2e5bc85, live at vdm285.github.io/listolista)
-Single-file vanilla HTML/JS (`index.html`, ~100 KB, 69% of it the aisle dictionary), Spanish UI.
-localStorage persistence, several lists, shared lists synced via the public HiveMQ MQTT broker
-(retained full-state JSON per room, per-item latest-change-wins with deletion markers), aisle
-sorting from a ~1,660-entry Mexican-Spanish dictionary. `sandbox.html` = the MQTT experiment.
-No tests yet.
-
-Known problems (details in `docs/research/2026-09-25-*.md`):
-- Shared lists are readable by anyone (plain JSON on a public broker; room ids are guessable
-  timestamps). Titles from the network are inserted as HTML (code-injection risk, line ~621).
-- On connect the app publishes before merging (sync race); a 5-second presence loop leaks timers.
-- The unpinned mqtt.js loads from unpkg in `<head>` and blocks the first paint; offline, shared
-  lists stay behind a "Conectando..." overlay.
-- The aisle matcher finds words inside words ("pantuflas" → bakery); 50 conflicting duplicate
-  keys; 75 accented keys can never match; aisles show alphabetically.
-- Pinch-zoom is disabled. README describes features that no longer exist.
+## Current state
+- `main` (live at vdm285.github.io/listolista): the original single file plus the 2026-09-25 safety
+  patch (no injection, unguessable room ids, publish-after-merge, pinned mqtt.js). Shared lists still
+  use the public HiveMQ broker in plain text until checkpoint 1 goes live.
+- Branch `design/checkpoint-1` (not live): the rebuild, built by `tools/build.py` from `src/` into one
+  `index.html`. End-to-end encrypted sync through our Cloudflare relay (`relay/`), link `#k=<secret>`;
+  merge, aisle matcher and dictionary as tested modules; PWA (manifest without start_url, sw.js,
+  icons); v1 lists migrate automatically. Tests: `sh tests/run.sh` (jsc) and `relay/test/run.sh`
+  (Node + local wrangler). Deploy: `tools/deploy.sh relay|preview` after `wrangler login`.
+- Waiting on Victor: Cloudflare account + `wrangler login`; Papel vs Renglones (build = Renglones);
+  51 dictionary conflicts (`data/aisles-review.md`); his store's aisle order; two-phone test (wife
+  iPhone, Victor Android) on the preview before going live.
+- Known flags: iPhone needs one tap for the keyboard; "huevos y leche" without a comma stays one item;
+  Android install without start_url to be checked on his phone.
 
 ## Decisions so far
 - Writing model: "paper" (Notepad-like lines) vs "rows" (input on top): Victor decides after
@@ -63,6 +61,7 @@ Known problems (details in `docs/research/2026-09-25-*.md`):
   aisles in walking order; corrections synced per list; no on-device ML for now.
 
 ## How to work here
+- Edit `src/` and `data/`, never `index.html` directly; run `python3 tools/build.py`.
 - Branch per piece of work; `main` is the live site.
 - Tests before features: pure logic (matcher, merge, crypto) is tested headless with macOS
   `jsc` (built in; no Node needed); UI checked in a browser. Tests are protected: don't weaken
