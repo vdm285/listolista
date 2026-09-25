@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ListoLista</title>
     <style>
         /* [SISTEMA DE DISEÑO: UTILIDAD PRAGMÁTICA] */
@@ -180,7 +180,6 @@
         .manual-join button { padding: 5px 10px; cursor: pointer; background: #eee; border: 1px solid #ccc; font-size: 0.8rem; }
 
     </style>
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
 
@@ -259,6 +258,12 @@
         const App = {
             config: { 
                 broker: 'wss://broker.hivemq.com:8884/mqtt',
+                // Pinned sync library, loaded only for shared lists, after the list is on screen.
+                // The integrity hash makes the browser refuse any altered copy.
+                mqttLib: {
+                    src: 'https://unpkg.com/mqtt@5.16.0/dist/mqtt.min.js',
+                    integrity: 'sha384-9WWboT9UtuPFRlOLq4FygQkcJxzYcpz8SXGkNyCEXM+44n14xzjNlrRKYZwuF/A6'
+                },
                 indexLocal: 'listolista_index_local',
                 indexShared: 'listolista_index_shared',
                 storePrefix: 'listolista_data_'
@@ -282,16 +287,52 @@
                 this.load(); 
                 this.bind();
                 
-                if (this.isShared) {
-                    this.dom.overlay.classList.remove('hidden'); 
-                    this.connectMQTT();
-                    this.dom.btnShare.classList.add('shared'); // Green style
-                } else {
-                    this.dom.btnShare.classList.add('local'); // Orange style
-                }
-                
                 this.render();
                 this.dom.i1.focus();
+
+                if (this.isShared) {
+                    this.startSync();
+                    window.addEventListener('online', () => { if (!this.client) this.startSync(); });
+                }
+            },
+
+            // Unguessable id for new shared lists (old links keep working).
+            randomId() {
+                const b = new Uint8Array(16);
+                crypto.getRandomValues(b);
+                return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+            },
+
+            setConn(status) {
+                const dot = document.getElementById('conn-dot');
+                if (!dot) return;
+                dot.classList.toggle('green', status === 'online');
+                dot.classList.toggle('orange', status !== 'online');
+            },
+
+            loadMqtt() {
+                if (window.mqtt) return Promise.resolve();
+                if (this.mqttLoading) return this.mqttLoading;
+                this.mqttLoading = new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = this.config.mqttLib.src;
+                    s.integrity = this.config.mqttLib.integrity;
+                    s.crossOrigin = 'anonymous';
+                    s.onload = () => resolve();
+                    s.onerror = () => { this.mqttLoading = null; s.remove(); reject(new Error('mqtt load failed')); };
+                    document.head.appendChild(s);
+                });
+                return this.mqttLoading;
+            },
+
+            startSync() {
+                this.setConn('connecting');
+                this.loadMqtt()
+                    .then(() => this.connectMQTT())
+                    .catch(() => {
+                        this.setConn('offline');
+                        this.showToast('Sin conexión: tus cambios se guardan aquí');
+                    });
             },
 
             cacheDOM() {
@@ -322,8 +363,7 @@
                     this.isShared = true;
                     this.roomId = room;
                     this.topics = {
-                        data: `listolista/v2/${room}/data`,
-                        presence: `listolista/v2/${room}/presence`
+                        data: `listolista/v2/${room}/data`
                     };
                     this.updateLibraryIndex(this.config.indexShared, room);
                 } else {
@@ -369,7 +409,7 @@
                 document.getElementById('btn-share').onclick = () => {
                     if (!this.isShared) {
                         if(confirm("¿Convertir esta lista en compartida?")) {
-                            const newRoomId = 'room_' + Date.now().toString(36);
+                            const newRoomId = 'room_' + this.randomId();
                             const currentData = JSON.stringify(this.state);
                             localStorage.setItem(this.config.storePrefix + newRoomId, currentData);
                             try {
@@ -517,41 +557,55 @@
             },
 
             connectMQTT() {
-                this.client = mqtt.connect(this.config.broker);
-                
+                if (this.client) return;
+                this.client = mqtt.connect(this.config.broker, { reconnectPeriod: 2000, connectTimeout: 10000 });
+
                 this.client.on('connect', () => {
-                    this.dom.overlay.classList.add('hidden'); 
-                    this.dom.btnShare.classList.remove('local');
-                    this.dom.btnShare.classList.add('shared');
-                    this.client.subscribe([this.topics.data, this.topics.presence]);
-                    this.publishPresence();
-                    setInterval(() => this.publishPresence(), 5000); 
-                    
-                    if (this.state.items.length > 0) this.publishState();
+                    this.setConn('online');
+                    this.synced = false;
+                    this.client.subscribe(this.topics.data);
+                    // The broker sends its stored copy right after subscribing. If none arrives,
+                    // this list is new on the broker: publish ours.
+                    clearTimeout(this.snapTimer);
+                    this.snapTimer = setTimeout(() => {
+                        if (this.synced) return;
+                        this.synced = true;
+                        if (this.state.items.length > 0 || this.pendingPublish) this.publishState();
+                    }, 2500);
                 });
+                this.client.on('offline', () => this.setConn('offline'));
+                this.client.on('close', () => this.setConn('offline'));
 
                 this.client.on('message', (topic, msg) => {
-                    try {
-                        const payload = JSON.parse(msg.toString());
-                        if (topic === this.topics.data) this.handleSync(payload);
-                        else if (topic === this.topics.presence) this.handlePresence(payload);
-                    } catch(e) {}
+                    if (topic !== this.topics.data) return;
+                    try { this.handleSync(JSON.parse(msg.toString())); } catch(e) {}
                 });
             },
 
             handleSync(remoteState) {
+                if (!remoteState || !Array.isArray(remoteState.items)) return;
                 let changed = false;
+                let localNewer = false;
 
-                if (remoteState.meta && remoteState.meta.timestamp > this.state.meta.timestamp) {
-                    this.state.meta = remoteState.meta;
-                    this.dom.title.innerText = remoteState.meta.title;
+                // Does this phone hold anything the stored copy lacks? Then publish the merge.
+                const remoteMap = new Map(remoteState.items.map(i => [i.id, i]));
+                this.state.items.forEach(lItem => {
+                    const rItem = remoteMap.get(lItem.id);
+                    if (!rItem || lItem.timestamp > rItem.timestamp) localNewer = true;
+                });
+
+                const rMeta = remoteState.meta || {};
+                if ((rMeta.timestamp || 0) > (this.state.meta.timestamp || 0)) {
+                    this.state.meta = rMeta;
+                    this.dom.title.innerText = rMeta.title || "NUEVA LISTA";
                     const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
                     this.updateLibraryIndex(key, this.roomId);
                     changed = true;
+                } else if ((this.state.meta.timestamp || 0) > (rMeta.timestamp || 0)) {
+                    localNewer = true;
                 }
 
                 const localMap = new Map(this.state.items.map(i => [i.id, i]));
-                
                 remoteState.items.forEach(rItem => {
                     const lItem = localMap.get(rItem.id);
                     if (!lItem || rItem.timestamp > lItem.timestamp) {
@@ -565,23 +619,22 @@
                     this.save();
                     this.render();
                 }
-            },
 
-            handlePresence(packet) {
-                this.peers[packet.id] = Date.now();
-                this.renderPeers();
+                const firstSnapshot = !this.synced;
+                this.synced = true;
+                clearTimeout(this.snapTimer);
+                if (localNewer || (firstSnapshot && this.pendingPublish)) this.publishState();
             },
 
             publishState() {
-                if (this.client) {
-                    this.client.publish(this.topics.data, JSON.stringify(this.state), { retain: true });
+                // Offline or not yet merged with the stored copy: keep the change here;
+                // it is published after the next merge.
+                if (!this.client || !this.client.connected || !this.synced) {
+                    this.pendingPublish = true;
+                    return;
                 }
-            },
-
-            publishPresence() {
-                if (this.client) {
-                    this.client.publish(this.topics.presence, JSON.stringify({ id: this.myId }));
-                }
+                this.pendingPublish = false;
+                this.client.publish(this.topics.data, JSON.stringify(this.state), { retain: true });
             },
 
             save() {
@@ -618,7 +671,9 @@
                         const meta = index[rid];
                         const div = document.createElement('div');
                         div.className = `saved-room ${rid === this.roomId ? 'active-room' : ''}`;
-                        div.innerHTML = `<strong>${meta.title}</strong>`;
+                        const strong = document.createElement('strong');
+                        strong.textContent = meta.title;
+                        div.appendChild(strong);
                         div.onclick = () => {
                             const param = isSharedCol ? 'room' : 'local';
                             window.location.search = `?${param}=${rid}`;
