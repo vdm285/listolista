@@ -95,20 +95,20 @@ var ListoMerge = (function () {
     if (lMeta && rMeta) {
       var lTs = getTs(lMeta, 'timestamp');
       var rTs = getTs(rMeta, 'timestamp');
+      // The winning meta is kept whole (it may carry more fields than title/timestamp).
       if (rTs > lTs) {
-        state.meta = { title: rMeta.title, timestamp: rTs };
+        state.meta = rMeta;
         changed = true;
-      } else if (lTs > rTs) {
-        state.meta = { title: lMeta.title, timestamp: lTs };
-        localNewer = true;
       } else {
-        state.meta = { title: lMeta.title, timestamp: lTs };
+        state.meta = lMeta;
+        if (lTs > rTs) { localNewer = true; }
       }
     } else if (rMeta) {
-      state.meta = { title: rMeta.title, timestamp: getTs(rMeta, 'timestamp') };
+      state.meta = rMeta;
       changed = true;
     } else if (lMeta) {
-      state.meta = { title: lMeta.title, timestamp: getTs(lMeta, 'timestamp') };
+      state.meta = lMeta;
+      localNewer = true;   // remote lacks it
     }
 
     // --- ovr (aisle corrections) ---

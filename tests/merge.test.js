@@ -101,5 +101,11 @@ var before = JSON.stringify([li, ri]);
 M(li, ri);
 eq('inputs untouched', JSON.stringify([li, ri]), before);
 
+// regressions from the senior review (2026-09-25)
+r = M(S([], { title: 'A', timestamp: 9, lastAuthor: 'Victor' }), S([], { title: 'B', timestamp: 5 }));
+eq('winning meta kept whole', r.state.meta, { title: 'A', timestamp: 9, lastAuthor: 'Victor' });
+r = M(S([it(1, 'huevos', 10)]), { items: [it(1, 'huevos', 10)] });
+eq('remote without meta -> localNewer', [r.changed, r.localNewer], [false, true]);
+
 print(pass + ' passed, ' + fail + ' failed');
 if (fail > 0) throw new Error(fail + ' test(s) failed');
