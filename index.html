@@ -1,788 +1,1314 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ListoLista</title>
-    <style>
-        /* [SISTEMA DE DISEÑO: UTILIDAD PRAGMÁTICA] */
-        :root {
-            --h-header: 50px;
-            --h-item: 55px;
-            --color-text: #000;
-            --color-bg: #fff;
-            --color-dim: #eee;
-            --font-stack: system-ui, -apple-system, sans-serif;
-        }
+<meta charset="UTF-8">
+<!-- Built by tools/build.py from src/ — edit src/, then run: python3 tools/build.py -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ListoLista</title>
+<meta name="description" content="La lista más simple: escribe, comparte con un enlace y táchala en el súper.">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="ListoLista">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta property="og:title" content="ListoLista">
+<meta property="og:description" content="Una lista compartida: ábrela y empieza a escribir.">
+<style>
+  :root {
+    --ink: #111; --bg: #fff; --dim: #ececec; --muted: #767676; --soft: #f6f6f4;
+    --done: #1d6b45; --flash: #dcf2e4; --warn: #b3261e; --bar: 52px; --row: 54px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #eee; --bg: #111; --dim: #2a2a2a; --muted: #9a9a9a; --soft: #1a1a1a;
+            --done: #6ccf98; --flash: #1c3a28; --warn: #ff8a80; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
+  body { overflow: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible, [contenteditable]:focus-visible, input:focus-visible { outline: 2px solid var(--done); outline-offset: 2px; }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        
-        body, html {
-            margin: 0; padding: 0;
-            height: 100%; width: 100%;
-            font-family: var(--font-stack);
-            background: var(--color-bg);
-            color: var(--color-text);
-            overflow: hidden; 
-        }
+  header {
+    position: fixed; inset: 0 0 auto 0; z-index: 10; background: var(--bg);
+    padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));
+    border-bottom: 2px solid var(--ink);
+  }
+  .bar { height: var(--bar); display: flex; align-items: center; gap: 4px; }
+  #title {
+    flex: 1; min-width: 0; font-weight: 700; font-size: 15px; letter-spacing: .06em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: none; padding: 6px 2px;
+  }
+  #title:focus { border-bottom: 1px dashed var(--ink); text-overflow: clip; }
+  .ico { min-width: 44px; height: 44px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; }
+  .ico:active { background: var(--dim); }
+  .ico svg { width: 22px; height: 22px; }
+  #btn-share { font-size: 14px; font-weight: 600; border: 1.5px solid var(--ink); height: 36px; border-radius: 18px; padding: 0 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: none; }
+  .dot.on { display: inline-block; background: var(--done); }
+  .dot.wait { display: inline-block; background: #e0a100; }
+  #offline { display: none; font-size: 13px; color: var(--muted); padding: 4px 0 6px; }
+  #offline.show { display: block; }
 
-        /* --- ENCABEZADO FIJO --- */
-        header {
-            height: var(--h-header);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 1rem;
-            border-bottom: 2px solid var(--color-text);
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: var(--color-bg);
-            z-index: 10;
-        }
+  main {
+    position: absolute; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+  .slot { display: flex; align-items: center; min-height: var(--row); border-bottom: 1px solid var(--dim); padding: 0 16px; }
+  .slot input { width: 100%; border: 0; outline: none; background: transparent; color: var(--ink); font: 17px var(--font); padding: 14px 0; }
+  .slot input::placeholder { color: var(--muted); }
 
-        /* TÍTULO EDITABLE */
-        #title-container { flex-grow: 1; margin-right: 10px; overflow: hidden; }
-        #title { 
-            font-weight: bold; font-size: 0.9rem; text-transform: uppercase; 
-            letter-spacing: 1px; padding: 5px; 
-            border-bottom: 1px dashed transparent; display: inline-block;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-        }
-        #title:focus { outline: none; border-bottom: 1px dashed var(--color-text); background: #f9f9f9; }
+  .row {
+    display: flex; align-items: center; gap: 10px; min-height: var(--row); border-bottom: 1px solid var(--dim);
+    padding: 6px 12px 6px 16px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
+  }
+  .row .txt { flex: 1; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+  .row.done .txt { text-decoration: line-through; color: var(--muted); }
+  .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--dim); border-radius: 12px; padding: 3px 9px; white-space: nowrap; }
+  .tag.guess { border-style: dashed; }
+  .flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+  @media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+  .group { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+           background: var(--soft); padding: 10px 16px 6px; border-bottom: 1px solid var(--dim); }
+  .done-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; color: var(--muted); font-size: 13px; }
+  .done-head button { color: var(--muted); font-size: 13px; text-decoration: underline; padding: 6px 4px; }
+  #write-zone { min-height: 30vh; }
 
-        /* ACCIONES DEL ENCABEZADO */
-        .actions { display: flex; align-items: center; gap: 15px; }
-        .icon-btn { cursor: pointer; font-size: 1.2rem; line-height: 1; user-select: none; position: relative; }
-        .icon-btn:hover { opacity: 0.7; }
-        .icon-btn:active { transform: scale(0.95); }
-        
-        /* SORT INDICATOR */
-        .sort-badge { 
-            position: absolute; bottom: -2px; right: -2px; 
-            font-size: 0.6rem; font-weight: bold; background: #eee; 
-            padding: 0 2px; border-radius: 3px; 
-        }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet {
+    width: 100%; max-width: 520px; background: var(--bg); border-top: 2px solid var(--ink); border-radius: 16px 16px 0 0;
+    padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px)); max-height: 80vh; overflow-y: auto;
+  }
+  .sheet h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 10px 12px 6px; }
+  .opt { width: 100%; text-align: left; padding: 14px 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 16px; }
+  .opt:active { background: var(--dim); }
+  .opt small { color: var(--muted); font-size: 13px; }
+  .opt.warn { color: var(--warn); }
+  .switch { width: 40px; height: 24px; border-radius: 12px; background: var(--dim); position: relative; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch.on { background: var(--done); } .switch.on::after { left: 19px; }
+  .aisle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px 8px 8px; }
+  .aisle-grid button { border: 1px solid var(--dim); border-radius: 10px; padding: 12px 8px; font-size: 15px; text-align: left; }
+  .aisle-grid button.cur { border-color: var(--ink); font-weight: 700; }
+  .order-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+  .order-row span { flex: 1; font-size: 16px; }
+  .order-row button { width: 44px; height: 40px; border: 1px solid var(--dim); border-radius: 10px; }
+  .paste { display: flex; gap: 6px; padding: 8px 12px; }
+  .paste input { flex: 1; min-width: 0; font: 16px var(--font); padding: 10px; border: 1px solid var(--dim); border-radius: 10px; background: var(--bg); color: var(--ink); }
+  .paste button { border: 1.5px solid var(--ink); border-radius: 10px; padding: 0 14px; }
+  .edit-box { padding: 8px 12px; } .edit-box input { width: 100%; font: 17px var(--font); padding: 12px; border: 1.5px solid var(--ink); border-radius: 10px; background: var(--bg); color: var(--ink); }
 
-        /* --- ÁREA DE VISUALIZACIÓN --- */
-        main {
-            position: absolute; top: var(--h-header); bottom: 0; left: 0; right: 0;
-            overflow-y: auto; display: flex; flex-direction: column;
-        }
-
-        /* --- FLUJO DE ENTRADA --- */
-        .slot {
-            min-height: var(--h-item); border-bottom: 1px solid var(--color-dim);
-            display: flex; align-items: center; padding: 0 1rem;
-        }
-        .slot input {
-            width: 100%; height: 100%; border: none; font-size: 1.1rem; 
-            font-family: inherit; outline: none; background: transparent;
-        }
-
-        /* --- ÍTEMS DE LA LISTA --- */
-        .row {
-            min-height: var(--h-item); border-bottom: 1px solid var(--color-dim);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 1rem; cursor: pointer; user-select: none; transition: background 0.2s;
-        }
-        
-        .item-content { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; padding: 8px 0; pointer-events: none; }
-        .txt { font-size: 1.1rem; line-height: 1.2; }
-        .cat-tag { font-size: 0.75rem; color: #666; margin-top: 2px; }
-        
-        .del {
-            padding: 10px 0 10px 20px; color: var(--color-text);
-            font-weight: bold; font-size: 1.4rem;
-        }
-
-        /* SECTION HEADERS (For Aisle Sort) */
-        .aisle-header {
-            background: #f0f0f0; padding: 5px 1rem; font-size: 0.8rem; 
-            font-weight: bold; color: #555; text-transform: uppercase;
-            border-bottom: 1px solid #ddd;
-        }
-
-        /* ESTADOS DE ÍTEM */
-        .done { background-color: #fcfcfc; color: #aaa; }
-        .done .txt { text-decoration: line-through; }
-        
-        .synced { background-color: #e8f5e9 !important; transition: background 0.5s; }
-
-        /* --- MODALES --- */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.4); z-index: 50;
-            display: flex; justify-content: center; align-items: center;
-            backdrop-filter: blur(2px);
-        }
-        .hidden { display: none !important; }
-
-        .modal-box {
-            background: var(--color-bg); width: 90%; max-width: 360px;
-            border: 2px solid var(--color-text); padding: 1.5rem;
-            box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
-            max-height: 80vh; overflow-y: auto;
-            position: relative;
-        }
-
-        .menu-opt {
-            padding: 10px 0; border-bottom: 1px dashed var(--color-dim);
-            font-size: 1rem; color: #555; cursor: pointer;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .menu-opt:hover { color: #000; }
-        .menu-header { margin-top:0; text-transform:uppercase; font-size:0.9rem; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px; }
-
-        /* Close X Button */
-        .close-x {
-            position: absolute; top: 10px; right: 15px;
-            font-size: 1.2rem; cursor: pointer; color: #888;
-            font-weight: bold; line-height: 1;
-        }
-        .close-x:hover { color: #000; }
-
-        /* Saved Rooms Styles */
-        .lib-columns { display: flex; gap: 15px; }
-        .lib-col { flex: 1; }
-        .lib-col h4 { font-size: 0.8rem; text-transform: uppercase; color: #888; border-bottom: 1px solid #eee; margin-bottom: 5px; }
-        
-        .saved-room { padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; }
-        .saved-room strong { display: block; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .saved-room span { font-size: 0.7rem; color: #aaa; display: block; }
-        .room-id-display { font-family: monospace; font-size: 0.65rem; color: #888; margin-top: 2px; }
-        .saved-room:hover { background: #f9f9f9; }
-        .active-room { background: #e3f2fd; }
-
-        #toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: #000; color: #fff; padding: 10px 20px; border-radius: 4px;
-            font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
-        }
-        #toast.show { opacity: 1; }
-        
-        /* Connection Status */
-        #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; position: absolute; top: -2px; right: -2px; border: 1px solid white; }
-        #conn-dot.green { background: #4caf50; }
-        #conn-dot.orange { background: #ff9800; } 
-
-        #connect-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(255,255,255,0.95); z-index: 200;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            font-size: 1.2rem; font-weight: bold; color: #555;
-        }
-        .spinner { font-size: 2rem; animation: spin 1s infinite linear; margin-bottom: 15px; }
-        @keyframes spin { from {transform:rotate(0deg);} to {transform:rotate(360deg);} }
-
-        .manual-join { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc; display: flex; gap: 5px; }
-        .manual-join input { flex: 1; padding: 5px; font-size: 0.8rem; border: 1px solid #ccc; }
-        .manual-join button { padding: 5px 10px; cursor: pointer; background: #eee; border: 1px solid #ccc; font-size: 0.8rem; }
-
-    </style>
+  #snack {
+    position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(150%);
+    background: var(--ink); color: var(--bg); border-radius: 12px; padding: 10px 10px 10px 16px; display: flex; align-items: center; gap: 12px;
+    font-size: 15px; max-width: calc(100% - 32px); transition: transform .2s; z-index: 50;
+  }
+  #snack.show { transform: translateX(-50%) translateY(0); }
+  #snack button { color: var(--bg); font-weight: 700; padding: 8px 10px; text-decoration: underline; }
+  #hint { display: none; margin: 10px 12px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: 12px; font-size: 14px; line-height: 1.45; }
+  #hint.show { display: block; } #hint button { text-decoration: underline; margin-top: 6px; padding: 4px 0; }
+</style>
 </head>
 <body>
+<header>
+  <div class="bar">
+    <div id="title" contenteditable="true" spellcheck="false" role="textbox" aria-label="Nombre de la lista">LISTA</div>
+    <button class="ico" id="btn-lists" aria-label="Mis listas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button id="btn-share" aria-label="Compartir la lista"><span class="dot" id="dot"></span>Compartir</button>
+    <button class="ico" id="btn-menu" aria-label="Más opciones">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>
+  </div>
+  <div id="offline">Sin conexión · tus cambios se guardan aquí y se enviarán al volver.</div>
+</header>
 
-    <div id="connect-overlay" class="hidden">
-        <div class="spinner">⏳</div>
-        <div>Conectando...</div>
-    </div>
+<main id="main">
+  <div id="hint" role="note"></div>
+  <div class="slot"><input id="i1" placeholder="Escribe aquí…" autocomplete="off" enterkeyhint="done" aria-label="Nuevo artículo"></div>
+  <div class="slot"><input id="i2" placeholder="Escribe aquí…" autocomplete="off" enterkeyhint="done" aria-label="Nuevo artículo"></div>
+  <div id="pending" role="list"></div>
+  <div id="donebox"></div>
+  <div id="write-zone" aria-hidden="true"></div>
+</main>
 
-    <header>
-        <div id="title-container">
-            <div id="title" contenteditable="true" spellcheck="false">NUEVA LISTA</div>
-        </div>
-        <div class="actions">
-            <div class="icon-btn" id="btn-clear" title="Limpiar completados">☑️</div>
-            <div class="icon-btn" id="btn-wipe" title="Borrar todo" style="color:#d32f2f;">🚮</div>
-            <div class="icon-btn" id="btn-sort" title="Ordenar">🔤<span class="sort-badge" id="sort-badge"></span></div>
-            <div class="icon-btn" id="btn-aisle" title="Ordenar por Pasillos">🏪<span class="sort-badge" id="aisle-badge"></span></div>
-            <div class="icon-btn" id="btn-library" title="Mis Listas">📚</div>
-            <div class="icon-btn" id="btn-share" title="Compartir">🔗<div id="conn-dot"></div></div>
-        </div>
-    </header>
+<div id="snack" role="status" aria-live="polite"><span id="snack-text"></span><button id="snack-undo">Deshacer</button></div>
 
-    <main id="viewport">
-        <div class="slot"><input id="i1" placeholder="Escribe aquí..." autocomplete="off"></div>
-        <div class="slot"><input id="i2" placeholder="Escribe aquí..." autocomplete="off"></div>
-        
-        <div id="pending-box"></div>
-        <div id="completed-box"></div>
-    </main>
+<script>
+// ListoLista aisle matcher: which supermarket aisle does a free-text item belong to?
+// Plain script (no modules, no libraries): defines the global `ListoAisles`.
+// Runs in browsers and in macOS `jsc` (tests: tests/run.sh).
+//
+// SPEC (docs/research/2026-09-25-aisle-sorting.md, "Recommendation for checkpoint 1")
+//
+// ListoAisles.fold(text) -> string
+//   Lowercase; remove accents and marks (NFD, then drop \p{M}, so ñ -> n, é -> e); a "." or ","
+//   between two digits becomes "." (decimals: "1,5" -> "1.5"); every other character that is not
+//   a letter, digit or "/" becomes a space; collapse spaces; trim.
+//
+// ListoAisles.stripQuantity(folded) -> string
+//   Removes a quantity at the START or END of an already folded text, e.g.
+//     "2 kg de tortillas" -> "tortillas", "1/2 docena de huevos" -> "huevos",
+//     "medio kilo de jamon de pavo" -> "jamon de pavo", "coca cola 3 litros" -> "coca cola",
+//     "3 leches" -> "leches", "panales etapa 3" -> "panales etapa".
+//   A quantity is: a number (digits, "1/2", "1.5") optionally followed by a unit and/or "de";
+//   or a number WORD (un, una, medio, media, dos ... diez) only when followed by a unit.
+//   Units: kg, kilo, kilos, g, gr, gramos, l, lt, litro, litros, ml, pieza, piezas, pz,
+//   paquete, paquetes, docena, docenas, lata, latas, bolsa, bolsas, caja, cajas.
+//   Number words NOT followed by a unit stay: "tres leches" stays "tres leches".
+//
+// ListoAisles.buildIndex(dict) -> index
+//   dict = { AISLE_ID: [term, term, ...], ... }. Terms may contain accents or several words;
+//   fold them the same way as items. The index is whatever aisleOf needs (precompute here, not
+//   on every call).
+//
+// ListoAisles.aisleOf(text, index, overrides) -> { id, term, guess }
+//   id: an aisle id from the dict, or "OTR" when nothing matches. term: the matched dictionary
+//   term (folded) or null. guess: true only for a typo-fallback match.
+//   Steps, in order:
+//   1. key = stripQuantity(fold(text)). Empty key -> { id: "OTR", term: null, guess: false }.
+//   2. overrides (optional object { folded item name: AISLE_ID }): if overrides[key] exists,
+//      return it (term = key, guess = false).
+//   3. Whole-word phrase scan over the words of key. A dictionary term of n words matches at
+//      position i when each of its words equals the item word at i+j OR one of that word's
+//      singular candidates: w, w minus final "s", w minus final "es", and "ces" -> "z"
+//      (nueces -> nuez). Never match inside a word ("pan" must not match "pantuflas").
+//      Prefer the term with the MOST words; among equal word counts, the LEFTMOST match.
+//      Filler words alone never match: de, del, la, el, los, las, para, con, sin, y, en, al, marca.
+//   4. Typo fallback, only when step 3 found nothing: for each item word with 5+ letters, find
+//      single-word terms at Damerau-Levenshtein distance 1 (distance up to 2 when the word has
+//      8+ letters). Take the smallest distance found; accept only if ALL terms at that distance
+//      belong to the SAME aisle; return that with guess = true.
+//   5. Otherwise { id: "OTR", term: null, guess: false }.
+//
+// ListoAisles.AISLES: [{ id, name }] in the default walking order:
+//   FRU Frutas y verduras, PAN Panadería y tortillería, CAR Carnes y salchichonería,
+//   LAC Lácteos y huevo, CON Congelados, DES Despensa, BOT Botanas y dulces,
+//   BEB Bebidas y licores, LIM Limpieza y hogar, HIG Higiene personal, FAR Farmacia,
+//   BBE Bebés, MAS Mascotas, OTR Otros.
 
-    <!-- MODAL: LIBRARY -->
-    <div id="modal-library" class="modal-overlay hidden">
-        <div class="modal-box" style="max-width: 500px;">
-            <div class="close-x" id="close-library">×</div>
-            <div class="lib-columns">
-                <div class="lib-col">
-                    <h4>Mis Listas</h4>
-                    <div id="list-local-container"></div>
-                    <div style="margin-top:10px; text-align:center;">
-                        <button id="btn-new-local" style="padding:5px 10px; font-size:0.8rem; cursor:pointer;">+ Nueva</button>
-                    </div>
-                </div>
-                <div class="lib-col" style="border-left:1px solid #eee; padding-left:15px;">
-                    <h4>Listas Compartidas</h4>
-                    <div id="list-shared-container"></div>
-                    <div class="manual-join">
-                        <input id="input-join-id" placeholder="ID de Sala..." />
-                        <button id="btn-join-manual">Entrar</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+var ListoAisles = (function () {
+  'use strict';
 
-    <div id="toast">¡Notificación!</div>
+  /* ---------- constants ---------- */
+  var FILLERS = { de: 1, del: 1, la: 1, el: 1, los: 1, las: 1,
+                  para: 1, con: 1, sin: 1, y: 1, en: 1, al: 1, marca: 1 };
 
-    <script>
-        // --- BRAIN: SUPERMARKET DICTIONARY (EXHAUSTIVE 1000+ Items) ---
-        // Normalized keys (no accents, lowercase) -> Category Name
-        const SUPERMARKET_DICT = {
-"manzana": "Frutas y Verduras 🥦", "pera": "Frutas y Verduras 🥦", "platano": "Frutas y Verduras 🥦", "naranja": "Frutas y Verduras 🥦", "limon": "Frutas y Verduras 🥦", "fresa": "Frutas y Verduras 🥦", "sandia": "Frutas y Verduras 🥦", "melon": "Frutas y Verduras 🥦", "mango": "Frutas y Verduras 🥦", "guayaba": "Frutas y Verduras 🥦", "papaya": "Frutas y Verduras 🥦", "pina": "Frutas y Verduras 🥦", "uvas": "Frutas y Verduras 🥦", "aguacate": "Frutas y Verduras 🥦", "jitomate": "Frutas y Verduras 🥦", "tomate": "Frutas y Verduras 🥦", "lechuga": "Frutas y Verduras 🥦", "cebolla": "Frutas y Verduras 🥦", "ajo": "Frutas y Verduras 🥦", "zanahoria": "Frutas y Verduras 🥦", "papa": "Frutas y Verduras 🥦", "calabaza": "Frutas y Verduras 🥦", "chayote": "Frutas y Verduras 🥦", "nopales": "Frutas y Verduras 🥦", "espinaca": "Frutas y Verduras 🥦", "brocoli": "Frutas y Verduras 🥦", "coliflor": "Frutas y Verduras 🥦", "pepino": "Frutas y Verduras 🥦", "elote": "Frutas y Verduras 🥦", "ejote": "Frutas y Verduras 🥦", "chile": "Frutas y Verduras 🥦", "cilantro": "Frutas y Verduras 🥦", "perejil": "Frutas y Verduras 🥦", "betabel": "Frutas y Verduras 🥦", "apio": "Frutas y Verduras 🥦", "hongos": "Frutas y Verduras 🥦", "champiñones": "Frutas y Verduras 🥦", "banana": "Frutas y Verduras 🥦", "durazno": "Frutas y Verduras 🥦", "frambuesa": "Frutas y Verduras 🥦", "mora azul": "Frutas y Verduras 🥦", "toronja": "Frutas y Verduras 🥦", "mandarina": "Frutas y Verduras 🥦", "kiwi": "Frutas y Verduras 🥦", "cebolla morada": "Frutas y Verduras 🥦", "col": "Frutas y Verduras 🥦", "nopal": "Frutas y Verduras 🥦", "chile serrano": "Frutas y Verduras 🥦", "chile jalapeño": "Frutas y Verduras 🥦", "chile jalapeno": "Frutas y Verduras 🥦", "chile habanero": "Frutas y Verduras 🥦", "chile poblano": "Frutas y Verduras 🥦", "setas": "Frutas y Verduras 🥦", "pepitas": "Frutas y Verduras 🥦", "tomate verde": "Frutas y Verduras 🥦", "chile morron": "Frutas y Verduras 🥦", "pimiento": "Frutas y Verduras 🥦", "pimienton": "Frutas y Verduras 🥦", "epazote": "Frutas y Verduras 🥦", "hierbabuena": "Frutas y Verduras 🥦", "menta": "Frutas y Verduras 🥦", "albahaca": "Frutas y Verduras 🥦", "romero": "Frutas y Verduras 🥦", "tomillo": "Frutas y Verduras 🥦", "oregano": "Frutas y Verduras 🥦", "camote": "Frutas y Verduras 🥦", "camotes": "Frutas y Verduras 🥦", "maiz": "Frutas y Verduras 🥦", "aguacates": "Frutas y Verduras 🥦", "platanos": "Frutas y Verduras 🥦", "platano macho": "Frutas y Verduras 🥦", "manzanas": "Frutas y Verduras 🥦", "naranjas": "Frutas y Verduras 🥦", "limones": "Frutas y Verduras 🥦", "lima": "Frutas y Verduras 🥦", "limas": "Frutas y Verduras 🥦", "toronjas": "Frutas y Verduras 🥦", "papayas": "Frutas y Verduras 🥦", "mangos": "Frutas y Verduras 🥦", "sandias": "Frutas y Verduras 🥦", "melones": "Frutas y Verduras 🥦", "peras": "Frutas y Verduras 🥦", "uva": "Frutas y Verduras 🥦", "fresas": "Frutas y Verduras 🥦", "mandarinas": "Frutas y Verduras 🥦", "duraznos": "Frutas y Verduras 🥦", "ciruela": "Frutas y Verduras 🥦", "ciruelas": "Frutas y Verduras 🥦", "guayabas": "Frutas y Verduras 🥦", "tuna": "Frutas y Verduras 🥦", "tunas": "Frutas y Verduras 🥦", "piñas": "Frutas y Verduras 🥦", "coco": "Frutas y Verduras 🥦", "cocos": "Frutas y Verduras 🥦", "jicama": "Frutas y Verduras 🥦", "jicamas": "Frutas y Verduras 🥦", "yuca": "Frutas y Verduras 🥦", "yucas": "Frutas y Verduras 🥦", "pepinos": "Frutas y Verduras 🥦", "rabano": "Frutas y Verduras 🥦", "rabanos": "Frutas y Verduras 🥦", "apios": "Frutas y Verduras 🥦", "brocolis": "Frutas y Verduras 🥦", "coliflores": "Frutas y Verduras 🥦", "repollo": "Frutas y Verduras 🥦", "col morada": "Frutas y Verduras 🥦", "ejotes": "Frutas y Verduras 🥦", "frijol verde": "Frutas y Verduras 🥦", "haba": "Frutas y Verduras 🥦", "habas": "Frutas y Verduras 🥦", "chicharo": "Frutas y Verduras 🥦", "chicharos": "Frutas y Verduras 🥦", "guisante": "Frutas y Verduras 🥦", "guisantes": "Frutas y Verduras 🥦", "betabeles": "Frutas y Verduras 🥦", "remolacha": "Frutas y Verduras 🥦", "remolachas": "Frutas y Verduras 🥦", "calabacita": "Frutas y Verduras 🥦", "calabacitas": "Frutas y Verduras 🥦", "verdolaga": "Frutas y Verduras 🥦", "verdolagas": "Frutas y Verduras 🥦", "quelite": "Frutas y Verduras 🥦", "quelites": "Frutas y Verduras 🥦", "champiñon": "Frutas y Verduras 🥦", "flor de calabaza": "Frutas y Verduras 🥦", "flor de jamaica": "Frutas y Verduras 🥦", "chile seco": "Frutas y Verduras 🥦", "chiles secos": "Frutas y Verduras 🥦", "chile pasilla": "Frutas y Verduras 🥦", "chile ancho": "Frutas y Verduras 🥦", "chile chipotle": "Frutas y Verduras 🥦", "chile cascabel": "Frutas y Verduras 🥦", "chile guajillo": "Frutas y Verduras 🥦", "chile mulato": "Frutas y Verduras 🥦", "chile piquin": "Frutas y Verduras 🥦", "pimiento rojo": "Frutas y Verduras 🥦", "pimiento verde": "Frutas y Verduras 🥦", "pimiento amarillo": "Frutas y Verduras 🥦", "pimiento naranja": "Frutas y Verduras 🥦", "acelgas": "Frutas y Verduras 🥦", "arandanos": "Frutas y Verduras 🥦", "berenjena": "Frutas y Verduras 🥦", "chile manzano": "Frutas y Verduras 🥦", "esparragos": "Frutas y Verduras 🥦", "guanabana": "Frutas y Verduras 🥦", "huitlacoche": "Frutas y Verduras 🥦", "jamaica": "Frutas y Verduras 🥦", "mamey": "Frutas y Verduras 🥦", "romeritos": "Frutas y Verduras 🥦", "tamarindo": "Frutas y Verduras 🥦", "zarzamora": "Frutas y Verduras 🥦",
-            "carne": "Carnes y Pescados 🥩", "res": "Carnes y Pescados 🥩", "bistec": "Carnes y Pescados 🥩", "molida": "Carnes y Pescados 🥩", "pollo": "Carnes y Pescados 🥩", "pechuga": "Carnes y Pescados 🥩", "pierna": "Carnes y Pescados 🥩", "muslo": "Carnes y Pescados 🥩", "milanesa": "Carnes y Pescados 🥩", "jamon": "Carnes y Pescados 🥩", "salchicha": "Carnes y Pescados 🥩", "chorizo": "Carnes y Pescados 🥩", "tocino": "Carnes y Pescados 🥩", "pescado": "Carnes y Pescados 🥩", "atun": "Carnes y Pescados 🥩", "camaron": "Carnes y Pescados 🥩", "filete": "Carnes y Pescados 🥩", "cerdo": "Carnes y Pescados 🥩", "chuleta": "Carnes y Pescados 🥩", "carne de res": "Carnes y Pescados 🥩", "molida de res": "Carnes y Pescados 🥩", "carne molida": "Carnes y Pescados 🥩", "costilla de res": "Carnes y Pescados 🥩", "chuleta de res": "Carnes y Pescados 🥩", "carne para guisar": "Carnes y Pescados 🥩", "pechuga de pollo": "Carnes y Pescados 🥩", "pierna de pollo": "Carnes y Pescados 🥩", "alas de pollo": "Carnes y Pescados 🥩", "milanesa de pollo": "Carnes y Pescados 🥩", "pavo": "Carnes y Pescados 🥩", "longaniza": "Carnes y Pescados 🥩", "costilla de cerdo": "Carnes y Pescados 🥩", "chuleta de cerdo": "Carnes y Pescados 🥩", "lomo de cerdo": "Carnes y Pescados 🥩", "atun fresco": "Carnes y Pescados 🥩", "tilapia": "Carnes y Pescados 🥩", "mojarra": "Carnes y Pescados 🥩", "pulpo": "Carnes y Pescados 🥩", "bistek": "Carnes y Pescados 🥩", "carne para deshebrar": "Carnes y Pescados 🥩", "falda de res": "Carnes y Pescados 🥩", "diesmillo": "Carnes y Pescados 🥩", "aguayon": "Carnes y Pescados 🥩", "arrachera": "Carnes y Pescados 🥩", "corte de res": "Carnes y Pescados 🥩", "puerco": "Carnes y Pescados 🥩", "pierna de cerdo": "Carnes y Pescados 🥩", "espaldilla de cerdo": "Carnes y Pescados 🥩", "carne de cerdo": "Carnes y Pescados 🥩", "mortadela": "Carnes y Pescados 🥩", "salchichas": "Carnes y Pescados 🥩", "salchichon": "Carnes y Pescados 🥩", "jamon de pierna": "Carnes y Pescados 🥩", "jamon de pavo": "Carnes y Pescados 🥩", "jamon de pollo": "Carnes y Pescados 🥩", "tocinos": "Carnes y Pescados 🥩", "carne de puerco": "Carnes y Pescados 🥩", "pavo entero": "Carnes y Pescados 🥩", "pechuga de pavo": "Carnes y Pescados 🥩", "pierna de pavo": "Carnes y Pescados 🥩", "pescados": "Carnes y Pescados 🥩", "filete de pescado": "Carnes y Pescados 🥩", "filete de mojarra": "Carnes y Pescados 🥩", "filete de robalo": "Carnes y Pescados 🥩", "huachinango": "Carnes y Pescados 🥩", "robalo": "Carnes y Pescados 🥩", "atun enlatado": "Carnes y Pescados 🥩", "salmon": "Carnes y Pescados 🥩", "trucha": "Carnes y Pescados 🥩", "camarones": "Carnes y Pescados 🥩", "calamar": "Carnes y Pescados 🥩", "calamares": "Carnes y Pescados 🥩", "mariscos": "Carnes y Pescados 🥩", "mix de mariscos": "Carnes y Pescados 🥩", "almejas": "Carnes y Pescados 🥩", "ostras": "Carnes y Pescados 🥩", "mejillones": "Carnes y Pescados 🥩", "lenguado": "Carnes y Pescados 🥩", "dorado": "Carnes y Pescados 🥩", "sierra": "Carnes y Pescados 🥩", "bacalao": "Carnes y Pescados 🥩", "bacalao seco": "Carnes y Pescados 🥩", "carne ahumada": "Carnes y Pescados 🥩", "carne para asar": "Carnes y Pescados 🥩", "carne para bistek": "Carnes y Pescados 🥩", "carne para milanesa": "Carnes y Pescados 🥩", "machaca": "Carnes y Pescados 🥩", "cecina": "Carnes y Pescados 🥩", "tasajo": "Carnes y Pescados 🥩", "carne de res para deshebrar": "Carnes y Pescados 🥩", "carne de res molida": "Carnes y Pescados 🥩", "carne de cerdo molida": "Carnes y Pescados 🥩", "carne de puerco molida": "Carnes y Pescados 🥩", "pierna de res": "Carnes y Pescados 🥩", "bistec de res": "Carnes y Pescados 🥩", "bistecs de res": "Carnes y Pescados 🥩", "carne de bovino": "Carnes y Pescados 🥩", "carne de ovino": "Carnes y Pescados 🥩", "borrego": "Carnes y Pescados 🥩", "cordero": "Carnes y Pescados 🥩", "carnero": "Carnes y Pescados 🥩", "higado": "Carnes y Pescados 🥩", "higado de res": "Carnes y Pescados 🥩", "higado de cerdo": "Carnes y Pescados 🥩", "corazon": "Carnes y Pescados 🥩", "corazon de res": "Carnes y Pescados 🥩", "corazon de cerdo": "Carnes y Pescados 🥩", "bistec de higado": "Carnes y Pescados 🥩", "albondigas": "Carnes y Pescados 🥩", "alitas": "Carnes y Pescados 🥩", "chicharrón": "Carnes y Pescados 🥩", "costilla": "Carnes y Pescados 🥩", "jamon serrano": "Carnes y Pescados 🥩", "menudencias": "Carnes y Pescados 🥩", "nuggets": "Carnes y Pescados 🥩", "pancita": "Carnes y Pescados 🥩", "pastor": "Carnes y Pescados 🥩", "pollo rostizado": "Carnes y Pescados 🥩", "sirloin": "Carnes y Pescados 🥩", "suadero": "Carnes y Pescados 🥩", "surimi": "Carnes y Pescados 🥩", "tripas": "Carnes y Pescados 🥩", "visceras": "Carnes y Pescados 🥩", "queso de puerco": "Carnes y Pescados 🥩", "pez": "Carnes y Pescados 🥩", "carnes": "Carnes y Pescados 🥩",
-            "leche": "Lácteos y Huevos 🧀", "huevo": "Lácteos y Huevos 🧀", "huevos": "Lácteos y Huevos 🧀", "yogurt": "Lácteos y Huevos 🧀", "yogur": "Lácteos y Huevos 🧀", "queso": "Lácteos y Huevos 🧀", "panela": "Lácteos y Huevos 🧀", "manchego": "Lácteos y Huevos 🧀", "oaxaca": "Lácteos y Huevos 🧀", "crema": "Lácteos y Huevos 🧀", "mantequilla": "Lácteos y Huevos 🧀", "margarina": "Lácteos y Huevos 🧀", "leche deslactosada": "Lácteos y Huevos 🧀", "leche light": "Lácteos y Huevos 🧀", "leche entera": "Lácteos y Huevos 🧀", "leche en polvo": "Lácteos y Huevos 🧀", "yogurt griego": "Lácteos y Huevos 🧀", "queso panela": "Lácteos y Huevos 🧀", "queso oaxaca": "Lácteos y Huevos 🧀", "queso fresco": "Lácteos y Huevos 🧀", "queso manchego": "Lácteos y Huevos 🧀", "queso crema": "Lácteos y Huevos 🧀", "docena de huevo": "Lácteos y Huevos 🧀", "huevos grandes": "Lácteos y Huevos 🧀", "nata": "Lácteos y Huevos 🧀", "leche descremada": "Lácteos y Huevos 🧀", "leche sin lactosa": "Lácteos y Huevos 🧀", "yogurt natural": "Lácteos y Huevos 🧀", "queso cotija": "Lácteos y Huevos 🧀", "queso cheddar": "Lácteos y Huevos 🧀", "leche almendras": "Lácteos y Huevos 🧀", "leche de coco": "Lácteos y Huevos 🧀", "crema acida": "Lácteos y Huevos 🧀", "crema para batir": "Lácteos y Huevos 🧀", "danonino": "Lácteos y Huevos 🧀", "jocoque": "Lácteos y Huevos 🧀", "lala": "Lácteos y Huevos 🧀", "leche de soya": "Lácteos y Huevos 🧀", "leche de avena": "Lácteos y Huevos 🧀", "leche evaporada": "Lácteos y Huevos 🧀", "leche condensada": "Lácteos y Huevos 🧀", "mantequilla sin sal": "Lácteos y Huevos 🧀", "mantequilla con sal": "Lácteos y Huevos 🧀", "mantequilla light": "Lácteos y Huevos 🧀", "margarina light": "Lácteos y Huevos 🧀", "margarina sin sal": "Lácteos y Huevos 🧀", "margarina con sal": "Lácteos y Huevos 🧀", "manteca": "Lácteos y Huevos 🧀", "manteca vegetal": "Lácteos y Huevos 🧀", "media crema": "Lácteos y Huevos 🧀", "queso amarillo": "Lácteos y Huevos 🧀", "queso chihuahua": "Lácteos y Huevos 🧀", "queso de cabra": "Lácteos y Huevos 🧀", "queso doble crema": "Lácteos y Huevos 🧀", "queso gouda": "Lácteos y Huevos 🧀", "queso parmesano": "Lácteos y Huevos 🧀", "queso rayado": "Lácteos y Huevos 🧀", "requeson": "Lácteos y Huevos 🧀", "yakult": "Lácteos y Huevos 🧀", "yoplait": "Lácteos y Huevos 🧀", "huevos blancos": "Lácteos y Huevos 🧀", "huevos colorados": "Lácteos y Huevos 🧀", "huevos de gallina": "Lácteos y Huevos 🧀", "huevos organicos": "Lácteos y Huevos 🧀", "huevos de codorniz": "Lácteos y Huevos 🧀", "kefir": "Lácteos y Huevos 🧀", "suero": "Lácteos y Huevos 🧀", "suero de leche": "Lácteos y Huevos 🧀", "leche fermentada": "Lácteos y Huevos 🧀", "actimel": "Lácteos y Huevos 🧀", "yogur de soya": "Lácteos y Huevos 🧀", "yogurt de soya": "Lácteos y Huevos 🧀", "bebida lactea": "Lácteos y Huevos 🧀", "bebida de soya": "Lácteos y Huevos 🧀", "bebida de almendra": "Lácteos y Huevos 🧀", "bebida de avena": "Lácteos y Huevos 🧀", "bebida de arroz": "Lácteos y Huevos 🧀", "bebida de coco": "Lácteos y Huevos 🧀", "crema para niños": "Lácteos y Huevos 🧀", "crema para bebe": "Lácteos y Huevos 🧀", "crema para cafe": "Lácteos y Huevos 🧀", "crema batida": "Lácteos y Huevos 🧀", "crema chantilly": "Lácteos y Huevos 🧀", "crema de leche": "Lácteos y Huevos 🧀", "crema acidificada": "Lácteos y Huevos 🧀", "crema agria": "Lácteos y Huevos 🧀", "parmesano": "Lácteos y Huevos 🧀", "queso requeson": "Lácteos y Huevos 🧀", "queso cottage": "Lácteos y Huevos 🧀", "queso para derretir": "Lácteos y Huevos 🧀", "queso mozzarella": "Lácteos y Huevos 🧀", "mozzarella": "Lácteos y Huevos 🧀", "alpura": "Lácteos y Huevos 🧀", "philadelphia": "Lácteos y Huevos 🧀", "danone": "Lácteos y Huevos 🧀", "blanquillo": "Lácteos y Huevos 🧀", "blanquillos": "Lácteos y Huevos 🧀", "actus": "Lácteos y Huevos 🧀",
-            "pan": "Panadería y Tortillas 🍞", "tortillas": "Panadería y Tortillas 🍞", "bolillo": "Panadería y Tortillas 🍞", "pan dulce": "Panadería y Tortillas 🍞", "pan de caja": "Panadería y Tortillas 🍞", "bimbo": "Panadería y Tortillas 🍞", "tostadas": "Panadería y Tortillas 🍞", "galletas": "Panadería y Tortillas 🍞", "pan blanco": "Panadería y Tortillas 🍞", "pan integral": "Panadería y Tortillas 🍞", "pan bolillo": "Panadería y Tortillas 🍞", "telera": "Panadería y Tortillas 🍞", "torta telera": "Panadería y Tortillas 🍞", "concha": "Panadería y Tortillas 🍞", "donas": "Panadería y Tortillas 🍞", "biscocho": "Panadería y Tortillas 🍞", "bizcocho": "Panadería y Tortillas 🍞", "cuernito": "Panadería y Tortillas 🍞", "croissant": "Panadería y Tortillas 🍞", "tortillas de maiz": "Panadería y Tortillas 🍞", "tortillas de harina": "Panadería y Tortillas 🍞", "pan para hamburguesa": "Panadería y Tortillas 🍞", "pan para hotdog": "Panadería y Tortillas 🍞", "cuernitos": "Panadería y Tortillas 🍞", "polvoron": "Panadería y Tortillas 🍞", "marranito": "Panadería y Tortillas 🍞", "garibaldi": "Panadería y Tortillas 🍞", "baguette": "Panadería y Tortillas 🍞", "birote": "Panadería y Tortillas 🍞", "bisquets": "Panadería y Tortillas 🍞", "bolillos": "Panadería y Tortillas 🍞", "chapata": "Panadería y Tortillas 🍞", "conchas": "Panadería y Tortillas 🍞", "harina para hot cakes": "Panadería y Tortillas 🍞", "hot cakes": "Panadería y Tortillas 🍞", "mantecadas": "Panadería y Tortillas 🍞", "masa": "Panadería y Tortillas 🍞", "medias noches": "Panadería y Tortillas 🍞", "pan arabe": "Panadería y Tortillas 🍞", "pan de dulce": "Panadería y Tortillas 🍞", "pan de muerto": "Panadería y Tortillas 🍞", "pan hamburguesa": "Panadería y Tortillas 🍞", "pan hot dog": "Panadería y Tortillas 🍞", "pan molido": "Panadería y Tortillas 🍞", "pan tostado": "Panadería y Tortillas 🍞", "pastel": "Panadería y Tortillas 🍞", "pambazo": "Panadería y Tortillas 🍞", "teleras": "Panadería y Tortillas 🍞", "tortillinas": "Panadería y Tortillas 🍞", "totopos": "Panadería y Tortillas 🍞", "panquemado": "Panadería y Tortillas 🍞", "mexicano": "Panadería y Tortillas 🍞", "tamal": "Panadería y Tortillas 🍞", "tlaxcala": "Panadería y Tortillas 🍞", "galletas saladas": "Panadería y Tortillas 🍞", "galleta salada": "Panadería y Tortillas 🍞", "empanadas": "Panadería y Tortillas 🍞", "elote pan": "Panadería y Tortillas 🍞",
-            "arroz": "Despensa y Abarrotes 🥫", "frijol": "Despensa y Abarrotes 🥫", "frijoles": "Despensa y Abarrotes 🥫", "pasta": "Despensa y Abarrotes 🥫", "sopa": "Despensa y Abarrotes 🥫", "aceite": "Despensa y Abarrotes 🥫", "azucar": "Despensa y Abarrotes 🥫", "sal": "Despensa y Abarrotes 🥫", "harina": "Despensa y Abarrotes 🥫", "cafe": "Despensa y Abarrotes 🥫", "te": "Despensa y Abarrotes 🥫", "cereal": "Despensa y Abarrotes 🥫", "avena": "Despensa y Abarrotes 🥫", "atun en lata": "Despensa y Abarrotes 🥫", "sardinas": "Despensa y Abarrotes 🥫", "mayonesa": "Despensa y Abarrotes 🥫", "catsup": "Despensa y Abarrotes 🥫", "mostaza": "Despensa y Abarrotes 🥫", "salsa": "Despensa y Abarrotes 🥫", "pure de tomate": "Despensa y Abarrotes 🥫", "chiles en lata": "Despensa y Abarrotes 🥫", "consome": "Despensa y Abarrotes 🥫", "frijol negro": "Despensa y Abarrotes 🥫", "frijol bayo": "Despensa y Abarrotes 🥫", "frijol peruano": "Despensa y Abarrotes 🥫", "lentejas": "Despensa y Abarrotes 🥫", "garbanzo": "Despensa y Abarrotes 🥫", "espagueti": "Despensa y Abarrotes 🥫", "fideo": "Despensa y Abarrotes 🥫", "sopa de pasta": "Despensa y Abarrotes 🥫", "aceite vegetal": "Despensa y Abarrotes 🥫", "aceite de oliva": "Despensa y Abarrotes 🥫", "aceite de canola": "Despensa y Abarrotes 🥫", "azucar morena": "Despensa y Abarrotes 🥫", "piloncillo": "Despensa y Abarrotes 🥫", "harina de trigo": "Despensa y Abarrotes 🥫", "maizena": "Despensa y Abarrotes 🥫", "granola": "Despensa y Abarrotes 🥫", "galletas": "Despensa y Abarrotes 🥫", "galletas maria": "Despensa y Abarrotes 🥫", "galletas saladas": "Despensa y Abarrotes 🥫", "vegetales enlatados": "Despensa y Abarrotes 🥫", "salsa de tomate": "Despensa y Abarrotes 🥫", "salsa picante": "Despensa y Abarrotes 🥫", "consome de pollo": "Despensa y Abarrotes 🥫", "caldo de pollo": "Despensa y Abarrotes 🥫", "caldo de res": "Despensa y Abarrotes 🥫", "mole": "Despensa y Abarrotes 🥫", "vinagre": "Despensa y Abarrotes 🥫", "cafe soluble": "Despensa y Abarrotes 🥫", "chocolate en polvo": "Despensa y Abarrotes 🥫", "frijoles bayos": "Despensa y Abarrotes 🥫", "frijoles negros": "Despensa y Abarrotes 🥫", "garbanzos": "Despensa y Abarrotes 🥫", "sopa de letra": "Despensa y Abarrotes 🥫", "maseca": "Despensa y Abarrotes 🥫", "chocolate abuelita": "Despensa y Abarrotes 🥫", "salsa valentina": "Despensa y Abarrotes 🥫", "sardina en lata": "Despensa y Abarrotes 🥫", "chipotle en adobo": "Despensa y Abarrotes 🥫", "mermelada": "Despensa y Abarrotes 🥫", "miel": "Despensa y Abarrotes 🥫", "canela": "Despensa y Abarrotes 🥫", "elote en lata": "Despensa y Abarrotes 🥫", "chiles en escabeche": "Despensa y Abarrotes 🥫", "aceite en aerosol": "Despensa y Abarrotes 🥫", "aceitunas": "Despensa y Abarrotes 🥫", "achiote": "Despensa y Abarrotes 🥫", "aderezo": "Despensa y Abarrotes 🥫", "ajonjoli": "Despensa y Abarrotes 🥫", "almendras": "Despensa y Abarrotes 🥫", "atun": "Despensa y Abarrotes 🥫", "azucar glass": "Despensa y Abarrotes 🥫", "azucar mascabado": "Despensa y Abarrotes 🥫", "cajeta": "Despensa y Abarrotes 🥫", "chia": "Despensa y Abarrotes 🥫", "chiles en vinagre": "Despensa y Abarrotes 🥫", "chiles secos": "Despensa y Abarrotes 🥫", "clavo": "Despensa y Abarrotes 🥫", "coditos": "Despensa y Abarrotes 🥫", "comino": "Despensa y Abarrotes 🥫", "frijoles refritos": "Despensa y Abarrotes 🥫", "galletas marias": "Despensa y Abarrotes 🥫", "grenetina": "Despensa y Abarrotes 🥫", "haba": "Despensa y Abarrotes 🥫", "harina de maiz": "Despensa y Abarrotes 🥫", "knorr": "Despensa y Abarrotes 🥫", "knorr suiza": "Despensa y Abarrotes 🥫", "leche clavel": "Despensa y Abarrotes 🥫", "leche condensada": "Despensa y Abarrotes 🥫", "leche evaporada": "Despensa y Abarrotes 🥫", "lechera": "Despensa y Abarrotes 🥫", "maiz palomero": "Despensa y Abarrotes 🥫", "maiz pozolero": "Despensa y Abarrotes 🥫", "maruchan": "Despensa y Abarrotes 🥫", "miel de maple": "Despensa y Abarrotes 🥫", "nescafe": "Despensa y Abarrotes 🥫", "nuez": "Despensa y Abarrotes 🥫", "nutella": "Despensa y Abarrotes 🥫", "oregano": "Despensa y Abarrotes 🥫", "pasas": "Despensa y Abarrotes 🥫", "pimienta": "Despensa y Abarrotes 🥫", "sal de grano": "Despensa y Abarrotes 🥫", "salsa botanera": "Despensa y Abarrotes 🥫", "salsa de soya": "Despensa y Abarrotes 🥫", "salsa inglesa": "Despensa y Abarrotes 🥫", "salsa macha": "Despensa y Abarrotes 🥫", "salsa maggi": "Despensa y Abarrotes 🥫", "sardina": "Despensa y Abarrotes 🥫", "spaghetti": "Despensa y Abarrotes 🥫", "tajin": "Despensa y Abarrotes 🥫", "vainilla": "Despensa y Abarrotes 🥫", "verduras en lata": "Despensa y Abarrotes 🥫", "zucaritas": "Despensa y Abarrotes 🥫", "aceite de girasol": "Despensa y Abarrotes 🥫", "aceite de coco": "Despensa y Abarrotes 🥫", "aceite de aguacate": "Despensa y Abarrotes 🥫", "manteca": "Despensa y Abarrotes 🥫", "manteca vegetal": "Despensa y Abarrotes 🥫", "manteca de cerdo": "Despensa y Abarrotes 🥫", "sal de mesa": "Despensa y Abarrotes 🥫", "sal marina": "Despensa y Abarrotes 🥫", "sal kosher": "Despensa y Abarrotes 🥫", "sal de mar": "Despensa y Abarrotes 🥫", "sal yodada": "Despensa y Abarrotes 🥫", "sal sin yodo": "Despensa y Abarrotes 🥫", "pimienta negra": "Despensa y Abarrotes 🥫", "pimienta blanca": "Despensa y Abarrotes 🥫", "pimienta molida": "Despensa y Abarrotes 🥫", "pimienta entera": "Despensa y Abarrotes 🥫", "pimienta cayena": "Despensa y Abarrotes 🥫", "pimienta de jamaica": "Despensa y Abarrotes 🥫", "azucar blanca": "Despensa y Abarrotes 🥫", "azucar para hornear": "Despensa y Abarrotes 🥫", "edulcorante": "Despensa y Abarrotes 🥫", "sustituto de azucar": "Despensa y Abarrotes 🥫", "stevia": "Despensa y Abarrotes 🥫", "miel de abeja": "Despensa y Abarrotes 🥫", "miel agave": "Despensa y Abarrotes 🥫", "miel de maguey": "Despensa y Abarrotes 🥫", "vinagre blanco": "Despensa y Abarrotes 🥫", "vinagre de manzana": "Despensa y Abarrotes 🥫", "vinagre de vino": "Despensa y Abarrotes 🥫", "vinagre de arroz": "Despensa y Abarrotes 🥫", "vinagre balsamico": "Despensa y Abarrotes 🥫", "vinagre tinto": "Despensa y Abarrotes 🥫", "mayonesa light": "Despensa y Abarrotes 🥫", "mayonesa de aceite de oliva": "Despensa y Abarrotes 🥫", "mayonesa vegana": "Despensa y Abarrotes 🥫", "mostaza amarilla": "Despensa y Abarrotes 🥫", "mostaza dijon": "Despensa y Abarrotes 🥫", "mostaza de grano": "Despensa y Abarrotes 🥫", "ketchup": "Despensa y Abarrotes 🥫", "crema de cacahuate": "Despensa y Abarrotes 🥫", "crema de mani": "Despensa y Abarrotes 🥫", "mermelada de fresa": "Despensa y Abarrotes 🥫", "mermelada de durazno": "Despensa y Abarrotes 🥫", "mermelada de guayaba": "Despensa y Abarrotes 🥫", "mermelada de piña": "Despensa y Abarrotes 🥫", "cajeta de celaya": "Despensa y Abarrotes 🥫", "cajeta de leite": "Despensa y Abarrotes 🥫", "dulce de leche": "Despensa y Abarrotes 🥫", "dulce de coco": "Despensa y Abarrotes 🥫", "dulce de guayaba": "Despensa y Abarrotes 🥫", "dulce de membrillo": "Despensa y Abarrotes 🥫", "ate": "Despensa y Abarrotes 🥫", "ate de membrillo": "Despensa y Abarrotes 🥫", "ate de guayaba": "Despensa y Abarrotes 🥫", "chile en polvo": "Despensa y Abarrotes 🥫", "chile piquin": "Despensa y Abarrotes 🥫", "chile de arbol molido": "Despensa y Abarrotes 🥫", "caldo de tomate": "Despensa y Abarrotes 🥫", "cubito de caldo": "Despensa y Abarrotes 🥫", "pollo en polvo": "Despensa y Abarrotes 🥫", "res en polvo": "Despensa y Abarrotes 🥫", "tomate en polvo": "Despensa y Abarrotes 🥫", "polvo para hornear": "Despensa y Abarrotes 🥫", "royal": "Despensa y Abarrotes 🥫", "bicarbonato de sodio": "Despensa y Abarrotes 🥫", "esencia de vainilla": "Despensa y Abarrotes 🥫", "extracto de vainilla": "Despensa y Abarrotes 🥫", "canela molida": "Despensa y Abarrotes 🥫", "canela en rama": "Despensa y Abarrotes 🥫", "clavo de olor": "Despensa y Abarrotes 🥫", "clavos de olor": "Despensa y Abarrotes 🥫", "nuez moscada": "Despensa y Abarrotes 🥫", "nuez moscada molida": "Despensa y Abarrotes 🥫", "cominos": "Despensa y Abarrotes 🥫", "comino molido": "Despensa y Abarrotes 🥫", "pimienta gorda": "Despensa y Abarrotes 🥫", "pimienta negra entera": "Despensa y Abarrotes 🥫", "aji": "Despensa y Abarrotes 🥫", "aji molido": "Despensa y Abarrotes 🥫", "orégano seco": "Despensa y Abarrotes 🥫", "orégano": "Despensa y Abarrotes 🥫", "tomillo seco": "Despensa y Abarrotes 🥫", "romero seco": "Despensa y Abarrotes 🥫", "albahaca seca": "Despensa y Abarrotes 🥫", "laurel": "Despensa y Abarrotes 🥫", "hojas de laurel": "Despensa y Abarrotes 🥫", "panela": "Despensa y Abarrotes 🥫", "papel para hornear": "Despensa y Abarrotes 🥫", "papel aluminio": "Despensa y Abarrotes 🥫", "aluminio": "Despensa y Abarrotes 🥫", "film transparente": "Despensa y Abarrotes 🥫", "plastico transparente": "Despensa y Abarrotes 🥫", "envoltura de plastico": "Despensa y Abarrotes 🥫", "servilletas de papel": "Despensa y Abarrotes 🥫", "servilleta": "Despensa y Abarrotes 🥫", "servilletas": "Despensa y Abarrotes 🥫", "toallas de papel": "Despensa y Abarrotes 🥫", "toalla de papel": "Despensa y Abarrotes 🥫", "papel de cocina": "Despensa y Abarrotes 🥫", "kleenex": "Despensa y Abarrotes 🥫", "pañuelos de papel": "Despensa y Abarrotes 🥫", "pañuelo de papel": "Despensa y Abarrotes 🥫", "salmón en lata": "Despensa y Abarrotes 🥫", "fruta enlatada": "Despensa y Abarrotes 🥫", "maiz": "Despensa y Abarrotes 🥫", "chiles secos": "Despensa y Abarrotes 🥫", "nixtamal": "Despensa y Abarrotes 🥫", "masa harina": "Despensa y Abarrotes 🥫", "levadura": "Despensa y Abarrotes 🥫", "bicarbonato": "Despensa y Abarrotes 🥫", "chocolate cocina": "Despensa y Abarrotes 🥫", "caldillo": "Despensa y Abarrotes 🥫", "frijol refrito": "Despensa y Abarrotes 🥫", "frijol bayo": "Despensa y Abarrotes 🥫", "frijol pinto": "Despensa y Abarrotes 🥫", "arroz blanco": "Despensa y Abarrotes 🥫", "arroz integral": "Despensa y Abarrotes 🥫", "arroz precocido": "Despensa y Abarrotes 🥫", "salsa botella": "Despensa y Abarrotes 🥫", "cascabel": "Despensa y Abarrotes 🥫", "guajillo": "Despensa y Abarrotes 🥫", "ancho": "Despensa y Abarrotes 🥫", "pasilla": "Despensa y Abarrotes 🥫", "chipotle": "Despensa y Abarrotes 🥫", "tomillo": "Despensa y Abarrotes 🥫", "azafran": "Despensa y Abarrotes 🥫", "jengibre": "Despensa y Abarrotes 🥫", "endulzante": "Despensa y Abarrotes 🥫", "miel abeja": "Despensa y Abarrotes 🥫", "miel maple": "Despensa y Abarrotes 🥫", "aceite oliva": "Despensa y Abarrotes 🥫", "aceite canola": "Despensa y Abarrotes 🥫", "vino cocina": "Despensa y Abarrotes 🥫", "caldo res": "Despensa y Abarrotes 🥫", "caldo verduras": "Despensa y Abarrotes 🥫", "consome polvo": "Despensa y Abarrotes 🥫", "sopa pasta": "Despensa y Abarrotes 🥫", "sopa arroz": "Despensa y Abarrotes 🥫", "gelatina": "Despensa y Abarrotes 🥫", "postre": "Despensa y Abarrotes 🥫", "flan": "Despensa y Abarrotes 🥫",
-            "avena instantanea": "Despensa y Abarrotes 🥫", "barra cereal": "Despensa y Abarrotes 🥫", "lenteja": "Despensa y Abarrotes 🥫", "garbanzo": "Despensa y Abarrotes 🥫", "habas": "Despensa y Abarrotes 🥫", "altramuz": "Despensa y Abarrotes 🥫", "macarron": "Despensa y Abarrotes 🥫", "lasana": "Despensa y Abarrotes 🥫", "especias": "Despensa y Abarrotes 🥫", "condimentos": "Despensa y Abarrotes 🥫", "salsa de soya": "Despensa y Abarrotes 🥫", "elote enlatado": "Despensa y Abarrotes 🥫", "harina maiz": "Despensa y Abarrotes 🥫", "chocolate polvo": "Despensa y Abarrotes 🥫", "soda": "Despensa y Abarrotes 🥫",
-            "refresco": "Bebidas 🥤", "coca": "Bebidas 🥤", "agua": "Bebidas 🥤", "jugo": "Bebidas 🥤", "cerveza": "Bebidas 🥤", "vino": "Bebidas 🥤", "tequila": "Bebidas 🥤", "chelas": "Bebidas 🥤", "coca cola": "Bebidas 🥤", "pepsi": "Bebidas 🥤", "sprite": "Bebidas 🥤", "fanta": "Bebidas 🥤", "sidral": "Bebidas 🥤", "manzanita": "Bebidas 🥤", "fresca": "Bebidas 🥤", "agua mineral": "Bebidas 🥤", "jugo de naranja": "Bebidas 🥤", "boing": "Bebidas 🥤", "del valle": "Bebidas 🥤", "cerveza corona": "Bebidas 🥤", "agua embotellada": "Bebidas 🥤", "refrescos": "Bebidas 🥤", "cervezas": "Bebidas 🥤", "soda": "Bebidas 🥤", "jugo de manzana": "Bebidas 🥤", "jugo de uva": "Bebidas 🥤", "bebida deportiva": "Bebidas 🥤", "energetica": "Bebidas 🥤", "te": "Bebidas 🥤", "te frio": "Bebidas 🥤", "te helado": "Bebidas 🥤", "cafe": "Bebidas 🥤", "cafe soluble": "Bebidas 🥤", "horchata": "Bebidas 🥤", "agua de jamaica": "Bebidas 🥤", "agua de tamarindo": "Bebidas 🥤", "limonada": "Bebidas 🥤", "naranjada": "Bebidas 🥤", "mezcal": "Bebidas 🥤", "ron": "Bebidas 🥤", "vodka": "Bebidas 🥤", "whisky": "Bebidas 🥤", "brandy": "Bebidas 🥤", "agua de coco": "Bebidas 🥤", "jumex": "Bebidas 🥤", "ponche": "Bebidas 🥤", "rompope": "Bebidas 🥤", "agua fresca": "Bebidas 🥤", "tejuino": "Bebidas 🥤", "tepache": "Bebidas 🥤", "kombucha": "Bebidas 🥤", "tinto": "Bebidas 🥤", "modelo": "Bebidas 🥤", "corona": "Bebidas 🥤", "pacifico": "Bebidas 🥤", "tecate": "Bebidas 🥤", "sol": "Bebidas 🥤", "victoria": "Bebidas 🥤", "gatorade": "Bebidas 🥤", "electrolit": "Bebidas 🥤", "red bull": "Bebidas 🥤", "monster": "Bebidas 🥤", "tang": "Bebidas 🥤", "kool aid": "Bebidas 🥤", "valle": "Bebidas 🥤", "agua de sabor": "Bebidas 🥤", "agua natural": "Bebidas 🥤", "agua purificada": "Bebidas 🥤", "jugo concentrado": "Bebidas 🥤", "pulque": "Bebidas 🥤", "licor": "Bebidas 🥤", "chocolate leche": "Bebidas 🥤", "redbull": "Bebidas 🥤", "leche en polvo": "Bebidas 🥤", "jugo uva": "Bebidas 🥤", "jugo pina": "Bebidas 🥤", "jugo mango": "Bebidas 🥤", "cheves": "Bebidas 🥤", "indio": "Bebidas 🥤", "caguama": "Bebidas 🥤", "nescafe": "Bebidas 🥤", "epura": "Bebidas 🥤", "bonafont": "Bebidas 🥤", "ciel": "Bebidas 🥤", "agua de sabor": "Bebidas 🥤", "ades": "Bebidas 🥤", "bacardi": "Bebidas 🥤", "champagne": "Bebidas 🥤", "clamato": "Bebidas 🥤", "cognac": "Bebidas 🥤", "ginebra": "Bebidas 🥤", "jarritos": "Bebidas 🥤", "jugo verde": "Bebidas 🥤", "leche saborizada": "Bebidas 🥤", "peñafiel": "Bebidas 🥤", "sidra": "Bebidas 🥤", "sq": "Bebidas 🥤", "suero": "Bebidas 🥤", "te de manzanilla": "Bebidas 🥤", "vino blanco": "Bebidas 🥤", "vino tinto": "Bebidas 🥤", "zuko": "Bebidas 🥤",
-            "papas": "Botanas y Dulces 🍫", "sabritas": "Botanas y Dulces 🍫", "botana": "Botanas y Dulces 🍫", "chocolate": "Botanas y Dulces 🍫", "dulces": "Botanas y Dulces 🍫", "chicles": "Botanas y Dulces 🍫", "cacahuates": "Botanas y Dulces 🍫", "palomitas": "Botanas y Dulces 🍫", "papas fritas": "Botanas y Dulces 🍫", "doritos": "Botanas y Dulces 🍫", "takis": "Botanas y Dulces 🍫", "cheetos": "Botanas y Dulces 🍫", "ruffles": "Botanas y Dulces 🍫", "rancheritos": "Botanas y Dulces 🍫", "totopos": "Botanas y Dulces 🍫", "chicharron": "Botanas y Dulces 🍫", "gomitas": "Botanas y Dulces 🍫", "panditas": "Botanas y Dulces 🍫", "mazapan": "Botanas y Dulces 🍫", "pulparindo": "Botanas y Dulces 🍫", "lucas": "Botanas y Dulces 🍫", "skwinkles": "Botanas y Dulces 🍫", "bubulubu": "Botanas y Dulces 🍫", "carlos v": "Botanas y Dulces 🍫", "galletas": "Botanas y Dulces 🍫", "galletas marias": "Botanas y Dulces 🍫", "nueces": "Botanas y Dulces 🍫", "fruta seca": "Botanas y Dulces 🍫", "cacahuates japoneses": "Botanas y Dulces 🍫", "semillas": "Botanas y Dulces 🍫", "galletas dulces": "Botanas y Dulces 🍫", "chocolate barra": "Botanas y Dulces 🍫", "caramelos": "Botanas y Dulces 🍫", "paleta": "Botanas y Dulces 🍫", "helado": "Botanas y Dulces 🍫", "nuez pecana": "Botanas y Dulces 🍫", "nuez de la india": "Botanas y Dulces 🍫", "semilla girasol": "Botanas y Dulces 🍫", "semilla calabaza": "Botanas y Dulces 🍫", "palomitas microondas": "Botanas y Dulces 🍫", "galleta salada": "Botanas y Dulces 🍫", "galleta dulce": "Botanas y Dulces 🍫", "gansito": "Botanas y Dulces 🍫", "pinguino": "Botanas y Dulces 🍫", "maria": "Botanas y Dulces 🍫", "chocolate abuelita": "Botanas y Dulces 🍫", "chocolate canela": "Botanas y Dulces 🍫", "dulce leche": "Botanas y Dulces 🍫", "cajeta": "Botanas y Dulces 🍫", "nieves": "Botanas y Dulces 🍫", "flan": "Botanas y Dulces 🍫", "gelatina": "Botanas y Dulces 🍫", "chicharrones": "Botanas y Dulces 🍫", "esquites": "Botanas y Dulces 🍫", "dulce": "Botanas y Dulces 🍫", "caramelos": "Botanas y Dulces 🍫", "nuez": "Botanas y Dulces 🍫", "almendra": "Botanas y Dulces 🍫", "pistache": "Botanas y Dulces 🍫", "churro": "Botanas y Dulces 🍫", "nacho": "Botanas y Dulces 🍫", "tostitos": "Botanas y Dulces 🍫", "nieve": "Botanas y Dulces 🍫", "barritas": "Botanas y Dulces 🍫", "chitos": "Botanas y Dulces 🍫", "chocokrispis": "Botanas y Dulces 🍫", "churros": "Botanas y Dulces 🍫", "duvalin": "Botanas y Dulces 🍫", "emperador": "Botanas y Dulces 🍫", "ferrero": "Botanas y Dulces 🍫", "frituras": "Botanas y Dulces 🍫", "jericalla": "Botanas y Dulces 🍫", "kinder delice": "Botanas y Dulces 🍫", "miguelito": "Botanas y Dulces 🍫", "oreo": "Botanas y Dulces 🍫", "paletas": "Botanas y Dulces 🍫", "papitas": "Botanas y Dulces 🍫", "pepitas": "Botanas y Dulces 🍫", "pingüinos": "Botanas y Dulces 🍫", "pistaches": "Botanas y Dulces 🍫", "postre": "Botanas y Dulces 🍫", "rufles": "Botanas y Dulces 🍫", "tamarindo dulce": "Botanas y Dulces 🍫", "milky way": "Botanas y Dulces 🍫", "snickers": "Botanas y Dulces 🍫", "kit kat": "Botanas y Dulces 🍫", "vero": "Botanas y Dulces 🍫", "pelon pelo rico": "Botanas y Dulces 🍫", "chicle": "Botanas y Dulces 🍫", "mentos": "Botanas y Dulces 🍫", "halls": "Botanas y Dulces 🍫", "trident": "Botanas y Dulces 🍫", "skittles": "Botanas y Dulces 🍫", "m&m": "Botanas y Dulces 🍫",
-            "detergente": "Limpieza y Hogar 🧹", "jabon": "Limpieza y Hogar 🧹", "cloro": "Limpieza y Hogar 🧹", "suavitel": "Limpieza y Hogar 🧹", "fabuloso": "Limpieza y Hogar 🧹", "papel higienico": "Limpieza y Hogar 🧹", "servilletas": "Limpieza y Hogar 🧹", "bolsas basura": "Limpieza y Hogar 🧹", "escoba": "Limpieza y Hogar 🧹", "trapeador": "Limpieza y Hogar 🧹", "fibras": "Limpieza y Hogar 🧹", "detergente en polvo": "Limpieza y Hogar 🧹", "suavizante": "Limpieza y Hogar 🧹", "jabon para trastes": "Limpieza y Hogar 🧹", "pinol": "Limpieza y Hogar 🧹", "bolsas de basura": "Limpieza y Hogar 🧹", "papel aluminio": "Limpieza y Hogar 🧹", "limpiador multiusos": "Limpieza y Hogar 🧹", "jabon de barra": "Limpieza y Hogar 🧹", "detergente liquido": "Limpieza y Hogar 🧹", "jabon para ropa": "Limpieza y Hogar 🧹", "lavatrastes": "Limpieza y Hogar 🧹", "jaboncillo": "Limpieza y Hogar 🧹", "esponja": "Limpieza y Hogar 🧹", "fibra": "Limpieza y Hogar 🧹", "toallas de papel": "Limpieza y Hogar 🧹", "insecticida": "Limpieza y Hogar 🧹", "ambientador": "Limpieza y Hogar 🧹", "trapero": "Limpieza y Hogar 🧹", "pasta para zapatos": "Limpieza y Hogar 🧹", "limpiavidrios": "Limpieza y Hogar 🧹", "limpiapisos": "Limpieza y Hogar 🧹", "blanqueador": "Limpieza y Hogar 🧹", "esponjas": "Limpieza y Hogar 🧹", "recogedor": "Limpieza y Hogar 🧹", "toallas de papel": "Limpieza y Hogar 🧹", "plasticos": "Limpieza y Hogar 🧹", "velas": "Limpieza y Hogar 🧹", "focos": "Limpieza y Hogar 🧹", "limpiavidrios": "Limpieza y Hogar 🧹", "comet": "Limpieza y Hogar 🧹", "downy": "Limpieza y Hogar 🧹", "desengrasante": "Limpieza y Hogar 🧹", "pino": "Limpieza y Hogar 🧹", "bolsa de basura": "Limpieza y Hogar 🧹", "bolsas de basura negras": "Limpieza y Hogar 🧹", "bolsas de basura transparentes": "Limpieza y Hogar 🧹", "bolsas de basura grandes": "Limpieza y Hogar 🧹", "bolsas de basura medianas": "Limpieza y Hogar 🧹", "bolsas de basura pequeñas": "Limpieza y Hogar 🧹", "bolsas para basura": "Limpieza y Hogar 🧹", "bolsas para reciclaje": "Limpieza y Hogar 🧹", "detergente para ropa": "Limpieza y Hogar 🧹", "detergente para ropa blanca": "Limpieza y Hogar 🧹", "detergente para ropa de color": "Limpieza y Hogar 🧹", "detergente para ropa delicada": "Limpieza y Hogar 🧹", "detergente para ropa de bebe": "Limpieza y Hogar 🧹", "jabon en polvo": "Limpieza y Hogar 🧹", "jabon de lavar": "Limpieza y Hogar 🧹", "jabon de lavanderia": "Limpieza y Hogar 🧹", "suavizante de telas": "Limpieza y Hogar 🧹", "suavizante para ropa": "Limpieza y Hogar 🧹", "suavizante de ropa": "Limpieza y Hogar 🧹", "suavizante con aroma": "Limpieza y Hogar 🧹", "cloro liquido": "Limpieza y Hogar 🧹", "cloro en gel": "Limpieza y Hogar 🧹", "cloro en polvo": "Limpieza y Hogar 🧹", "blanqueador liquido": "Limpieza y Hogar 🧹", "blanqueador en polvo": "Limpieza y Hogar 🧹", "desinfectante": "Limpieza y Hogar 🧹", "desinfectante de pisos": "Limpieza y Hogar 🧹", "desinfectante de baños": "Limpieza y Hogar 🧹", "desinfectante de cocina": "Limpieza y Hogar 🧹", "desinfectante multiusos": "Limpieza y Hogar 🧹", "pinol aplas": "Limpieza y Hogar 🧹", "pinol de pino": "Limpieza y Hogar 🧹", "fabuloso multiusos": "Limpieza y Hogar 🧹", "lysol": "Limpieza y Hogar 🧹", "cloralex": "Limpieza y Hogar 🧹", "aromatizante": "Limpieza y Hogar 🧹", "aromatizante de ambiente": "Limpieza y Hogar 🧹", "aromatizante de auto": "Limpieza y Hogar 🧹", "aromatizante de baño": "Limpieza y Hogar 🧹", "aromatizante de cocina": "Limpieza y Hogar 🧹", "aromatizante de closet": "Limpieza y Hogar 🧹", "ambientador de aerosol": "Limpieza y Hogar 🧹", "ambientador de barras": "Limpieza y Hogar 🧹", "ambientador automatico": "Limpieza y Hogar 🧹", "ambientador electrico": "Limpieza y Hogar 🧹", "ambientador de pino": "Limpieza y Hogar 🧹", "ambientador de flores": "Limpieza y Hogar 🧹", "ambientador de vainilla": "Limpieza y Hogar 🧹", "ambientador de manzana": "Limpieza y Hogar 🧹", "ambientador de cocina": "Limpieza y Hogar 🧹", "ambientador de baño": "Limpieza y Hogar 🧹", "ambientador de closet": "Limpieza y Hogar 🧹", "ambientador de auto": "Limpieza y Hogar 🧹", "ambientador de casa": "Limpieza y Hogar 🧹", "papel de baño": "Limpieza y Hogar 🧹", "papel sanitario": "Limpieza y Hogar 🧹", "papel de cocina": "Limpieza y Hogar 🧹", "rollos de papel": "Limpieza y Hogar 🧹", "toalla de papel": "Limpieza y Hogar 🧹", "pañuelos de papel": "Limpieza y Hogar 🧹", "pañuelo de papel": "Limpieza y Hogar 🧹", "servilletas de papel": "Limpieza y Hogar 🧹", "servilleta de papel": "Limpieza y Hogar 🧹", "trapo": "Limpieza y Hogar 🧹", "trapos": "Limpieza y Hogar 🧹", "trapo para cocina": "Limpieza y Hogar 🧹", "trapo para limpiar": "Limpieza y Hogar 🧹", "trapo de microfibra": "Limpieza y Hogar 🧹", "trapo de algodon": "Limpieza y Hogar 🧹", "trapo de cocina": "Limpieza y Hogar 🧹", "esponja para trastes": "Limpieza y Hogar 🧹", "esponja para platos": "Limpieza y Hogar 🧹", "esponja para cocina": "Limpieza y Hogar 🧹", "esponja de metal": "Limpieza y Hogar 🧹", "esponja de acero": "Limpieza y Hogar 🧹", "esponja de acero inoxidable": "Limpieza y Hogar 🧹", "esponja de aluminio": "Limpieza y Hogar 🧹", "estropajo": "Limpieza y Hogar 🧹", "estropajos": "Limpieza y Hogar 🧹", "fregadero": "Limpieza y Hogar 🧹", "liquido para trastes": "Limpieza y Hogar 🧹", "detergente para trastes": "Limpieza y Hogar 🧹", "detergente para platos": "Limpieza y Hogar 🧹", "detergente para lavar platos": "Limpieza y Hogar 🧹", "shampoo para trastes": "Limpieza y Hogar 🧹", "limpiador": "Limpieza y Hogar 🧹", "limpiador de vidrios": "Limpieza y Hogar 🧹", "limpiador de baños": "Limpieza y Hogar 🧹", "limpiador de cocina": "Limpieza y Hogar 🧹", "limpiador de pisos": "Limpieza y Hogar 🧹", "limpia parabrisas": "Limpieza y Hogar 🧹", "cera": "Limpieza y Hogar 🧹", "cera para pisos": "Limpieza y Hogar 🧹", "cera para muebles": "Limpieza y Hogar 🧹", "cera para autos": "Limpieza y Hogar 🧹", "aceite para muebles": "Limpieza y Hogar 🧹", "lustra muebles": "Limpieza y Hogar 🧹", "pinalen": "Limpieza y Hogar 🧹", "pinalen de pino": "Limpieza y Hogar 🧹", "cerillos": "Limpieza y Hogar 🧹", "foca": "Limpieza y Hogar 🧹", "guantes": "Limpieza y Hogar 🧹", "jerga": "Limpieza y Hogar 🧹", "maestro limpio": "Limpieza y Hogar 🧹", "ajax": "Limpieza y Hogar 🧹", "salvo": "Limpieza y Hogar 🧹", "scotch brite": "Limpieza y Hogar 🧹", "regio": "Limpieza y Hogar 🧹", "pétalo": "Limpieza y Hogar 🧹", "petalo": "Limpieza y Hogar 🧹", "bounty": "Limpieza y Hogar 🧹", "glad": "Limpieza y Hogar 🧹",
-            "shampoo": "Higiene Personal 🛁", "acondicionador": "Higiene Personal 🛁", "jabon corporal": "Higiene Personal 🛁", "desodorante": "Higiene Personal 🛁", "pasta dental": "Higiene Personal 🛁", "cepillo dientes": "Higiene Personal 🛁", "crema corporal": "Higiene Personal 🛁", "toallas femeninas": "Higiene Personal 🛁", "rastrillos": "Higiene Personal 🛁", "papel higienico": "Higiene Personal 🛁", "jabon de tocador": "Higiene Personal 🛁", "jabon de barra": "Limpieza y Hogar 🧹", "acondicionador de cabello": "Higiene Personal 🛁", "gel para cabello": "Higiene Personal 🛁", "cera para cabello": "Higiene Personal 🛁", "jabon de baño": "Higiene Personal 🛁", "perfume": "Higiene Personal 🛁", "crema de afeitar": "Higiene Personal 🛁", "tampones": "Higiene Personal 🛁", "papel de baño": "Higiene Personal 🛁", "cepillo dental": "Higiene Personal 🛁", "hilo dental": "Higiene Personal 🛁", "enjuague bucal": "Higiene Personal 🛁", "gel antibacterial": "Higiene Personal 🛁", "jabon liquido": "Higiene Personal 🛁", "gel de baño": "Higiene Personal 🛁", "protector solar": "Higiene Personal 🛁", "toallas humedas": "Higiene Personal 🛁", "panuelos": "Higiene Personal 🛁", "cottonetes": "Higiene Personal 🛁", "rasuradora": "Higiene Personal 🛁", "jabon cuerpo": "Higiene Personal 🛁", "cepillo": "Higiene Personal 🛁", "navajas": "Higiene Personal 🛁", "crema": "Higiene Personal 🛁", "compotas": "Higiene Personal 🛁", "toallas sanitarias": "Higiene Personal 🛁", "condon": "Higiene Personal 🛁", "loción": "Higiene Personal 🛁", "aftershave": "Higiene Personal 🛁", "agua oxigenada": "Higiene Personal 🛁", "aceite de bebe": "Higiene Personal 🛁", "bloqueador": "Higiene Personal 🛁", "cepillo pelo": "Higiene Personal 🛁", "crema para peinar": "Higiene Personal 🛁", "cotonetes": "Higiene Personal 🛁", "espuma afeitar": "Higiene Personal 🛁", "gel": "Higiene Personal 🛁", "kotex": "Higiene Personal 🛁", "liga": "Higiene Personal 🛁", "locion": "Higiene Personal 🛁", "maquillaje": "Higiene Personal 🛁", "mascarilla": "Higiene Personal 🛁", "palmolive": "Higiene Personal 🛁", "pasta de dientes": "Higiene Personal 🛁", "rastrillo": "Higiene Personal 🛁", "rímel": "Higiene Personal 🛁", "talco": "Higiene Personal 🛁", "tinte": "Higiene Personal 🛁", "vaselina": "Higiene Personal 🛁", "champu": "Higiene Personal 🛁", "shampoo para cabello": "Higiene Personal 🛁", "shampoo para cabellos": "Higiene Personal 🛁", "shampoo para cabello seco": "Higiene Personal 🛁", "shampoo para cabello graso": "Higiene Personal 🛁", "shampoo para cabello normal": "Higiene Personal 🛁", "shampoo para cabello mixto": "Higiene Personal 🛁", "shampoo para cabello dañado": "Higiene Personal 🛁", "shampoo para cabello teñido": "Higiene Personal 🛁", "shampoo anticaspa": "Higiene Personal 🛁", "shampoo para caída del cabello": "Higiene Personal 🛁", "shampoo para cabello con caspa": "Higiene Personal 🛁", "shampoo para cabello con resequedad": "Higiene Personal 🛁", "acondicionador para cabello": "Higiene Personal 🛁", "acondicionador para cabello seco": "Higiene Personal 🛁", "acondicionador para cabello graso": "Higiene Personal 🛁", "acondicionador para cabello dañado": "Higiene Personal 🛁", "acondicionador para cabello teñido": "Higiene Personal 🛁", "acondicionador de pina": "Higiene Personal 🛁", "acondicionador de coco": "Higiene Personal 🛁", "acondicionador de argan": "Higiene Personal 🛁", "acondicionador de almendras": "Higiene Personal 🛁", "acondicionador de keratina": "Higiene Personal 🛁", "gel para peinar": "Higiene Personal 🛁", "pomada para cabello": "Higiene Personal 🛁", "laca para cabello": "Higiene Personal 🛁", "laca": "Higiene Personal 🛁", "espuma para peinar": "Higiene Personal 🛁", "mouse para cabello": "Higiene Personal 🛁", "mouse": "Higiene Personal 🛁", "espuma": "Higiene Personal 🛁", "dentifrico": "Higiene Personal 🛁", "pasta de dientes blanqueadora": "Higiene Personal 🛁", "pasta de dientes para dientes sensibles": "Higiene Personal 🛁", "cepillo de dientes": "Higiene Personal 🛁", "cepillo de dientes electrico": "Higiene Personal 🛁", "cepillo de dientes manual": "Higiene Personal 🛁", "hilo dental de menta": "Higiene Personal 🛁", "hilo dental con fluor": "Higiene Personal 🛁", "enjuague bucal con alcohol": "Higiene Personal 🛁", "enjuague bucal sin alcohol": "Higiene Personal 🛁", "colutorio": "Higiene Personal 🛁", "desodorante para axilas": "Higiene Personal 🛁", "desodorante en barra": "Higiene Personal 🛁", "desodorante en aerosol": "Higiene Personal 🛁", "desodorante roll-on": "Higiene Personal 🛁", "desodorante en crema": "Higiene Personal 🛁", "desodorante sin alcohol": "Higiene Personal 🛁", "desodorante antitranspirante": "Higiene Personal 🛁", "talco para bebe": "Higiene Personal 🛁", "talco corporal": "Higiene Personal 🛁", "talco de bebe": "Higiene Personal 🛁", "talco para adultos": "Higiene Personal 🛁", "espuma de afeitar": "Higiene Personal 🛁", "gel de afeitar": "Higiene Personal 🛁", "jabon de afeitar": "Higiene Personal 🛁", "maquinilla de afeitar": "Higiene Personal 🛁", "maquinilla de afeitar manual": "Higiene Personal 🛁", "maquinilla de afeitar electrica": "Higiene Personal 🛁", "navaja de afeitar": "Higiene Personal 🛁", "hojas de afeitar": "Higiene Personal 🛁", "hojas para afeitar": "Higiene Personal 🛁", "crema humectante": "Higiene Personal 🛁", "crema hidratante": "Higiene Personal 🛁", "crema para cuerpo": "Higiene Personal 🛁", "crema para manos": "Higiene Personal 🛁", "crema para cara": "Higiene Personal 🛁", "crema para pies": "Higiene Personal 🛁", "crema antiedad": "Higiene Personal 🛁", "crema antiarrugas": "Higiene Personal 🛁", "crema para ojos": "Higiene Personal 🛁", "crema de ojos": "Higiene Personal 🛁", "contorno de ojos": "Higiene Personal 🛁", "bloqueador solar": "Higiene Personal 🛁", "protector solar para cara": "Higiene Personal 🛁", "protector solar para cuerpo": "Higiene Personal 🛁", "protector solar infantil": "Higiene Personal 🛁", "protector solar para bebe": "Higiene Personal 🛁", "protector solar con color": "Higiene Personal 🛁", "protector solar sin color": "Higiene Personal 🛁", "protector solar con aroma": "Higiene Personal 🛁", "protector solar sin aroma": "Higiene Personal 🛁", "toalla femenina": "Higiene Personal 🛁", "toalla sanitaria": "Higiene Personal 🛁", "toalla para menstruacion": "Higiene Personal 🛁", "tampon": "Higiene Personal 🛁", "tampones de algodon": "Higiene Personal 🛁", "tampones con aplicador": "Higiene Personal 🛁", "tampones sin aplicador": "Higiene Personal 🛁", "copa menstrual": "Higiene Personal 🛁", "copa para menstruacion": "Higiene Personal 🛁", "protector diario": "Higiene Personal 🛁", "pantiprotector": "Higiene Personal 🛁", "toallas intimas": "Higiene Personal 🛁", "toallitas intimas": "Higiene Personal 🛁", "lubricante intimo": "Higiene Personal 🛁", "lubricante para relaciones": "Higiene Personal 🛁", "lubricante con sabor": "Higiene Personal 🛁", "lubricante sin sabor": "Higiene Personal 🛁", "lubricante con aroma": "Higiene Personal 🛁", "lubricante sin aroma": "Higiene Personal 🛁", "condones": "Higiene Personal 🛁", "preservativo": "Higiene Personal 🛁", "preservativos": "Higiene Personal 🛁", "condon masculino": "Higiene Personal 🛁", "condon femenino": "Higiene Personal 🛁", "preservativo masculino": "Higiene Personal 🛁", "preservativo femenino": "Higiene Personal 🛁", "condon con sabores": "Higiene Personal 🛁", "condon con texturas": "Higiene Personal 🛁", "condon con retardante": "Higiene Personal 🛁", "condon con espermicida": "Higiene Personal 🛁", "jabon de piel": "Higiene Personal 🛁", "gel de piel": "Higiene Personal 🛁", "crema para piel": "Higiene Personal 🛁", "locion para piel": "Higiene Personal 🛁", "tonico para piel": "Higiene Personal 🛁", "tonico facial": "Higiene Personal 🛁", "agua micelar": "Higiene Personal 🛁", "desmaquillante": "Higiene Personal 🛁", "desmaquillante de ojos": "Higiene Personal 🛁", "desmaquillante en crema": "Higiene Personal 🛁", "desmaquillante en agua": "Higiene Personal 🛁", "desmaquillante bifasico": "Higiene Personal 🛁", "colonia": "Higiene Personal 🛁", "colonia para bebe": "Higiene Personal 🛁", "colonia para niños": "Higiene Personal 🛁", "colonia para adultos": "Higiene Personal 🛁", "perfume para mujer": "Higiene Personal 🛁", "perfume para hombre": "Higiene Personal 🛁", "perfume unisex": "Higiene Personal 🛁", "fragancia": "Higiene Personal 🛁", "esencia": "Higiene Personal 🛁", "essence": "Higiene Personal 🛁", "desodorante de pies": "Higiene Personal 🛁", "spray para pies": "Higiene Personal 🛁", "talco para pies": "Higiene Personal 🛁", "piedra para pies": "Higiene Personal 🛁", "piedra pomez": "Higiene Personal 🛁", "lima para pies": "Higiene Personal 🛁", "lima para callos": "Higiene Personal 🛁", "cortauñas": "Higiene Personal 🛁", "corta uñas": "Higiene Personal 🛁", "cortador de uñas": "Higiene Personal 🛁", "tijeras para uñas": "Higiene Personal 🛁", "lima de uñas": "Higiene Personal 🛁", "lima para uñas": "Higiene Personal 🛁", "esmalte de uñas": "Higiene Personal 🛁", "esmalte": "Higiene Personal 🛁", "pintauñas": "Higiene Personal 🛁", "pinta uñas": "Higiene Personal 🛁", "quitaesmalte": "Higiene Personal 🛁", "acetona": "Higiene Personal 🛁", "removedor de esmalte": "Higiene Personal 🛁", "base para uñas": "Higiene Personal 🛁", "top coat para uñas": "Higiene Personal 🛁", "fortalecedor de uñas": "Higiene Personal 🛁", "endurecedor de uñas": "Higiene Personal 🛁", "crema para cuticulas": "Higiene Personal 🛁", "aceite para cuticulas": "Higiene Personal 🛁", "bastoncillos de algodon": "Higiene Personal 🛁", "hisopos de algodon": "Higiene Personal 🛁", "hisopos": "Higiene Personal 🛁", "bastoncillos": "Higiene Personal 🛁", "algodon hidrofilo": "Higiene Personal 🛁", "algodon en bolas": "Higiene Personal 🛁", "algodon en rollos": "Higiene Personal 🛁", "colgate": "Higiene Personal 🛁", "listerine": "Higiene Personal 🛁", "rexona": "Higiene Personal 🛁", "speed stick": "Higiene Personal 🛁", "gillette": "Higiene Personal 🛁", "saba": "Higiene Personal 🛁", "q-tips": "Higiene Personal 🛁",
-            "croquetas": "Mascotas 🐶", "alimento perro": "Mascotas 🐶", "alimento gato": "Mascotas 🐶", "arena gato": "Mascotas 🐶", "croquetas para perro": "Mascotas 🐶", "croquetas para gato": "Mascotas 🐶", "alimento para perro": "Mascotas 🐶", "alimento para gato": "Mascotas 🐶", "latitas de gato": "Mascotas 🐶", "premios para perro": "Mascotas 🐶", "premios para gato": "Mascotas 🐶", "arena para gato": "Mascotas 🐶", "juguete para perro": "Mascotas 🐶", "juguete para gato": "Mascotas 🐶", "alimento de perro": "Mascotas 🐶", "alimento de gato": "Mascotas 🐶", "huesos perro": "Mascotas 🐶", "alimento peces": "Mascotas 🐶", "juguetes perro": "Mascotas 🐶", "antipulgas": "Mascotas 🐶", "comida para perro": "Mascotas 🐶", "comida para gato": "Mascotas 🐶", "collar": "Mascotas 🐶", "correa": "Mascotas 🐶", "juguete para mascota": "Mascotas 🐶", "shampoo para mascota": "Mascotas 🐶", "pedigree": "Mascotas 🐶", "purina": "Mascotas 🐶", "croquetas para perros": "Mascotas 🐶", "croquetas para gatos": "Mascotas 🐶", "croquetas para mascotas": "Mascotas 🐶", "alimento seco para perro": "Mascotas 🐶", "alimento seco para gato": "Mascotas 🐶", "alimento humedo para perro": "Mascotas 🐶", "alimento humedo para gato": "Mascotas 🐶", "alimento para mascotas": "Mascotas 🐶", "alimento seco para mascotas": "Mascotas 🐶", "alimento humedo para mascotas": "Mascotas 🐶", "lata para perro": "Mascotas 🐶", "lata para gato": "Mascotas 🐶", "lata para mascotas": "Mascotas 🐶", "latas para perro": "Mascotas 🐶", "latas para gato": "Mascotas 🐶", "latas para mascotas": "Mascotas 🐶", "golosinas para perro": "Mascotas 🐶", "golosinas para gato": "Mascotas 🐶", "golosinas para mascotas": "Mascotas 🐶", "hueso para perro": "Mascotas 🐶", "hueso": "Mascotas 🐶", "hueso de cuero": "Mascotas 🐶", "hueso de plastico": "Mascotas 🐶", "juguete": "Mascotas 🐶", "juguete para mascotas": "Mascotas 🐶", "juguete para perros": "Mascotas 🐶", "juguete para gatos": "Mascotas 🐶", "arena para gatos": "Mascotas 🐶", "arena sanitaria": "Mascotas 🐶", "arena aglomerante": "Mascotas 🐶", "arena de silice": "Mascotas 🐶", "arena de papel": "Mascotas 🐶", "correa para perro": "Mascotas 🐶", "correa para mascotas": "Mascotas 🐶", "collar para perro": "Mascotas 🐶", "collar para gato": "Mascotas 🐶", "collar para mascotas": "Mascotas 🐶", "plato para perro": "Mascotas 🐶", "plato para gato": "Mascotas 🐶", "plato para mascotas": "Mascotas 🐶", "bebedero para perro": "Mascotas 🐶", "bebedero para gato": "Mascotas 🐶", "bebedero para mascotas": "Mascotas 🐶", "cepillo para perro": "Mascotas 🐶", "cepillo para gato": "Mascotas 🐶", "cepillo para mascotas": "Mascotas 🐶", "shampoo para perro": "Mascotas 🐶", "shampoo para gato": "Mascotas 🐶", "shampoo para mascotas": "Mascotas 🐶", "jabon para perro": "Mascotas 🐶", "jabon para gato": "Mascotas 🐶", "jabon para mascotas": "Mascotas 🐶", "desodorante para mascotas": "Mascotas 🐶", "spray para mascotas": "Mascotas 🐶", "vitaminas para perro": "Mascotas 🐶", "vitaminas para gato": "Mascotas 🐶", "suplementos para perro": "Mascotas 🐶", "suplementos para gato": "Mascotas 🐶", "antiparasitario": "Mascotas 🐶", "pipeta antipulgas": "Mascotas 🐶", "collar antipulgas": "Mascotas 🐶", "pastilla antipulgas": "Mascotas 🐶", "desparasitante": "Mascotas 🐶", "desparasitante para perro": "Mascotas 🐶", "desparasitante para gato": "Mascotas 🐶", "jaula para perro": "Mascotas 🐶", "jaula para gato": "Mascotas 🐶", "jaula para mascotas": "Mascotas 🐶", "transportadora para gato": "Mascotas 🐶", "transportadora para mascotas": "Mascotas 🐶", "cama para perro": "Mascotas 🐶", "cama para gato": "Mascotas 🐶", "cama para mascotas": "Mascotas 🐶", "ropa para perro": "Mascotas 🐶", "ropa para mascotas": "Mascotas 🐶", "chamarra para perro": "Mascotas 🐶", "sueter para perro": "Mascotas 🐶", "pañal para perro": "Mascotas 🐶", "pañales para perro": "Mascotas 🐶", "toallitas para perro": "Mascotas 🐶", "toallitas para gato": "Mascotas 🐶", "toallitas para mascotas": "Mascotas 🐶", "cat chow": "Mascotas 🐶", "dog chow": "Mascotas 🐶", "whiskas": "Mascotas 🐶", "carnaza": "Mascotas 🐶", "sobre gato": "Mascotas 🐶", "sobre perro": "Mascotas 🐶",
-            "aspirina": "Farmacia 💊", "paracetamol": "Farmacia 💊", "ibuprofeno": "Farmacia 💊", "curitas": "Farmacia 💊", "alcohol": "Farmacia 💊", "vitaminas": "Farmacia 💊", "condones": "Farmacia 💊", "paracetamol pediatrico": "Farmacia 💊", "paracetamol infantil": "Farmacia 💊", "ibuprofeno pediatrico": "Farmacia 💊", "ibuprofeno infantil": "Farmacia 💊", "antigripal": "Farmacia 💊", "jarabe para la tos": "Farmacia 💊", "pastillas para la garganta": "Farmacia 💊", "gasas": "Farmacia 💊", "vendas": "Farmacia 💊", "agua oxigenada": "Farmacia 💊", "algodon": "Farmacia 💊", "banditas": "Farmacia 💊", "preservativos": "Farmacia 💊", "vick": "Farmacia 💊", "termometro": "Farmacia 💊", "suero": "Farmacia 💊", "jarabe tos": "Farmacia 💊", "crema quemaduras": "Farmacia 💊", "analgesicos": "Farmacia 💊", "pastillas para la tos": "Farmacia 💊", "vitamina c": "Farmacia 💊", "vick vaporub": "Farmacia 💊", "paracetamol gotas": "Farmacia 💊", "paracetamol tabletas": "Farmacia 💊", "paracetamol capsulas": "Farmacia 💊", "paracetamol comprimidos": "Farmacia 💊", "ibuprofeno gotas": "Farmacia 💊", "ibuprofeno tabletas": "Farmacia 💊", "ibuprofeno capsulas": "Farmacia 💊", "naproxeno": "Farmacia 💊", "naproxeno sodico": "Farmacia 💊", "diclofenaco": "Farmacia 💊", "diclofenaco sodico": "Farmacia 💊", "diclofenaco potasico": "Farmacia 💊", "diclofenaco tabletas": "Farmacia 💊", "diclofenaco capsulas": "Farmacia 💊", "diclofenaco gotas": "Farmacia 💊", "aspirina infantil": "Farmacia 💊", "aspirina protect": "Farmacia 💊", "metamizol": "Farmacia 💊", "metamizol sodico": "Farmacia 💊", "buscapina": "Farmacia 💊", "buscopan": "Farmacia 💊", "buscapina compuesta": "Farmacia 💊", "mejoral": "Farmacia 💊", "mejoralito": "Farmacia 💊", "tempra": "Farmacia 💊", "tempra infantil": "Farmacia 💊", "tabcin": "Farmacia 💊", "tabcin antigripal": "Farmacia 💊", "tabcin active": "Farmacia 💊", "tabcin pm": "Farmacia 💊", "bisolvon": "Farmacia 💊", "bisolvon jarabe": "Farmacia 💊", "amoxicilina": "Farmacia 💊", "amoxicilina pediatrica": "Farmacia 💊", "penicilina": "Farmacia 💊", "penicilina pediatrica": "Farmacia 💊", "claritromicina": "Farmacia 💊", "azitromicina": "Farmacia 💊", "cefalexina": "Farmacia 💊", "metronidazol": "Farmacia 💊", "omeprazol": "Farmacia 💊", "omeprazol pediatrico": "Farmacia 💊", "ranitidina": "Farmacia 💊", "pantoprazol": "Farmacia 💊", "lansoprazol": "Farmacia 💊", "espumisan": "Farmacia 💊", "simeticona": "Farmacia 💊", "polietilenglicol": "Farmacia 💊", "lactulosa": "Farmacia 💊", "suerox": "Farmacia 💊", "electrolit": "Farmacia 💊", "suero oral": "Farmacia 💊", "suero pediatrico": "Farmacia 💊", "suero para bebe": "Farmacia 💊", "suero para niños": "Farmacia 💊", "suero casero": "Farmacia 💊", "antidiarreico": "Farmacia 💊", "loperamida": "Farmacia 💊", "caolin": "Farmacia 💊", "pectina": "Farmacia 💊", "caolin con pectina": "Farmacia 💊", "dimenhidrinato": "Farmacia 💊", "dramamin": "Farmacia 💊", "gravol": "Farmacia 💊", "antihistaminico": "Farmacia 💊", "loratadina": "Farmacia 💊", "cetirizina": "Farmacia 💊", "fexofenadina": "Farmacia 💊", "desloratadina": "Farmacia 💊", "hidroxizina": "Farmacia 💊", "difenhidramina": "Farmacia 💊", "dextrometorfano": "Farmacia 💊", "guaifenesina": "Farmacia 💊", "ambroxol": "Farmacia 💊", "clenbuterol": "Farmacia 💊", "salbutamol": "Farmacia 💊", "spray nasal": "Farmacia 💊", "oximetazolina": "Farmacia 💊", "clorfenamina": "Farmacia 💊", "fenilefrina": "Farmacia 💊", "pseudoefedrina": "Farmacia 💊", "gotas para los ojos": "Farmacia 💊", "gotas oculares": "Farmacia 💊", "lagrimas artificiales": "Farmacia 💊", "ketotifeno": "Farmacia 💊", "ketotifeno oftalmico": "Farmacia 💊", "clorfeniramina": "Farmacia 💊", "neomicina": "Farmacia 💊", "bacitracina": "Farmacia 💊", "pomada antibiotica": "Farmacia 💊", "crema antibiotica": "Farmacia 💊", "crema antifungica": "Farmacia 💊", "clotrimazol": "Farmacia 💊", "miconazol": "Farmacia 💊", "ketoconazol": "Farmacia 💊", "tolnaftato": "Farmacia 💊", "dexametasona": "Farmacia 💊", "polimixina": "Farmacia 💊", "sulfadiazina de plata": "Farmacia 💊", "iodo": "Farmacia 💊", "povidona yodada": "Farmacia 💊", "peroxido de hidrogeno": "Farmacia 💊", "clorhexidina": "Farmacia 💊", "gasas esteriles": "Farmacia 💊", "tela adhesiva": "Farmacia 💊", "cinta adhesiva": "Farmacia 💊", "espadrapo": "Farmacia 💊", "micropore": "Farmacia 💊", "alcohol etilico": "Farmacia 💊", "alcohol isopropilico": "Farmacia 💊", "suero fisiologico": "Farmacia 💊", "compresa fria": "Farmacia 💊", "compresa caliente": "Farmacia 💊", "glucosimetro": "Farmacia 💊", "tiras reactivas": "Farmacia 💊", "oximetro": "Farmacia 💊", "oximetro de pulso": "Farmacia 💊", "nebulizador": "Farmacia 💊", "mascarilla": "Farmacia 💊", "mascarilla quirurgica": "Farmacia 💊", "mascarilla n95": "Farmacia 💊", "mascarilla kn95": "Farmacia 💊", "cubrebocas": "Farmacia 💊", "cubrebocas quirurgico": "Farmacia 💊", "cubrebocas n95": "Farmacia 💊", "pañal para adulto": "Farmacia 💊", "pañales para adultos": "Farmacia 💊", "silla de ruedas": "Farmacia 💊",
-            "pañales": "Bebés 🍼", "panales": "Bebés 🍼", "toallitas humedas": "Bebés 🍼", "formula": "Bebés 🍼", "gerber": "Bebés 🍼", "panales recien nacido": "Bebés 🍼", "crema para rozaduras": "Bebés 🍼", "formula para bebe": "Bebés 🍼", "leche para bebe": "Bebés 🍼", "papillas": "Bebés 🍼", "mameluco": "Bebés 🍼", "chupon": "Bebés 🍼", "biberon": "Bebés 🍼", "pañal": "Bebés 🍼", "leche formula": "Bebés 🍼", "mamila": "Bebés 🍼", "talco": "Bebés 🍼", "pure": "Bebés 🍼", "pañal desechable": "Bebés 🍼", "leche materna": "Bebés 🍼", "toallas para bebe": "Bebés 🍼", "shampoo para bebe": "Bebés 🍼", "jabon para bebe": "Bebés 🍼", "crema para pañal": "Bebés 🍼", "babero": "Bebés 🍼", "chupón": "Bebés 🍼", "cereal para bebe": "Bebés 🍼", "formula infantil": "Bebés 🍼", "papilla": "Bebés 🍼", "juguete para bebe": "Bebés 🍼", "pañales desechables": "Bebés 🍼", "pañales de tela": "Bebés 🍼", "pañales para bebe": "Bebés 🍼", "pañales para bebes": "Bebés 🍼", "pañales para recien nacidos": "Bebés 🍼", "pañales para recien nacido": "Bebés 🍼", "pañales para prematuros": "Bebés 🍼", "pañales para niños": "Bebés 🍼", "pañales para niñas": "Bebés 🍼", "pañales nocturnos": "Bebés 🍼", "pañales diurnos": "Bebés 🍼", "pañales de entrenamiento": "Bebés 🍼", "pañales para bebe de niño": "Bebés 🍼", "pañales para bebe de niña": "Bebés 🍼", "formulas": "Bebés 🍼", "formula para lactantes": "Bebés 🍼", "formula para recien nacidos": "Bebés 🍼", "formula para recien nacido": "Bebés 🍼", "leche materizada": "Bebés 🍼", "leche de continuacion": "Bebés 🍼", "leche de crecimiento": "Bebés 🍼", "leche de transicion": "Bebés 🍼", "leche en polvo para bebe": "Bebés 🍼", "leche en polvo infantil": "Bebés 🍼", "cereal infantil": "Bebés 🍼", "cereal para lactantes": "Bebés 🍼", "papilla de fruta": "Bebés 🍼", "papilla de verdura": "Bebés 🍼", "papilla de cereal": "Bebés 🍼", "papilla de arroz": "Bebés 🍼", "papilla de avena": "Bebés 🍼", "papilla de maiz": "Bebés 🍼", "comida para bebe": "Bebés 🍼", "comida infantil": "Bebés 🍼", "comida para lactantes": "Bebés 🍼", "fruta para bebe": "Bebés 🍼", "verdura para bebe": "Bebés 🍼", "carne para bebe": "Bebés 🍼", "pollo para bebe": "Bebés 🍼", "pavo para bebe": "Bebés 🍼", "pescado para bebe": "Bebés 🍼", "frasco": "Bebés 🍼", "frasco de vidrio": "Bebés 🍼", "frasco de plastico": "Bebés 🍼", "frascos": "Bebés 🍼", "biberones": "Bebés 🍼", "biberon de vidrio": "Bebés 🍼", "biberon de plastico": "Bebés 🍼", "biberon anticolico": "Bebés 🍼", "biberon con tetina": "Bebés 🍼", "tetina": "Bebés 🍼", "tetinas": "Bebés 🍼", "chupones": "Bebés 🍼", "chupeta": "Bebés 🍼", "chupetas": "Bebés 🍼", "chupete": "Bebés 🍼", "chupetes": "Bebés 🍼", "mamadera": "Bebés 🍼", "mamaderas": "Bebés 🍼", "mamadera de vidrio": "Bebés 🍼", "mamadera de plastico": "Bebés 🍼", "mamadera con tetina": "Bebés 🍼", "chupón para bebe": "Bebés 🍼", "chupon para bebe": "Bebés 🍼", "chupones para bebe": "Bebés 🍼", "toallitas para bebe": "Bebés 🍼", "toallitas para bebes": "Bebés 🍼", "toallitas desechables": "Bebés 🍼", "toallitas para cambio": "Bebés 🍼", "toallitas para cambio de pañal": "Bebés 🍼", "toallitas para limpiar": "Bebés 🍼", "crema para pañalitis": "Bebés 🍼", "crema para irritacion": "Bebés 🍼", "pomada para pañalitis": "Bebés 🍼", "pomada para irritación": "Bebés 🍼", "talco para bebes": "Bebés 🍼", "talco para pañal": "Bebés 🍼", "shampoo para bebes": "Bebés 🍼", "champu para bebe": "Bebés 🍼", "champu para bebes": "Bebés 🍼", "jabon para bebes": "Bebés 🍼", "jabon de baño para bebes": "Bebés 🍼", "crema para bebes": "Bebés 🍼", "crema hidratante para bebe": "Bebés 🍼", "crema humectante para bebe": "Bebés 🍼", "locion para bebe": "Bebés 🍼", "locion para bebes": "Bebés 🍼", "aceite para bebe": "Bebés 🍼", "aceite para bebes": "Bebés 🍼", "aceite infantil": "Bebés 🍼", "algodon para bebe": "Bebés 🍼", "algodon para bebes": "Bebés 🍼", "algodon hidrofilo": "Bebés 🍼", "hisopos para bebe": "Bebés 🍼", "hisopos para bebes": "Bebés 🍼", "bastoncillos para bebe": "Bebés 🍼", "bastoncillos para bebes": "Bebés 🍼", "gasa para bebe": "Bebés 🍼", "gasa para bebes": "Bebés 🍼", "vendas para bebe": "Bebés 🍼", "vendas para bebes": "Bebés 🍼", "curitas para bebe": "Bebés 🍼", "curitas para bebes": "Bebés 🍼", "termometro para bebe": "Bebés 🍼", "termometro para bebes": "Bebés 🍼", "termometro rectal para bebe": "Bebés 🍼", "termometro digital para bebe": "Bebés 🍼", "termometro infrarrojo para bebe": "Bebés 🍼", "termometro de oido para bebe": "Bebés 🍼", "termometro temporal para bebe": "Bebés 🍼", "glucosimetro para bebe": "Bebés 🍼", "medicamentos para bebe": "Bebés 🍼", "medicamentos infantiles": "Bebés 🍼", "jarabe para bebe": "Bebés 🍼", "jarabe para bebes": "Bebés 🍼", "jarabe para la tos para bebe": "Bebés 🍼", "jarabe para la tos para bebes": "Bebés 🍼", "antipiretico para bebe": "Bebés 🍼", "analgesico para bebe": "Bebés 🍼", "antiinflamatorio para bebe": "Bebés 🍼", "antialergico para bebe": "Bebés 🍼", "antecesor": "Bebés 🍼", "mamilas": "Bebés 🍼", "nan": "Bebés 🍼", "leche nido": "Bebés 🍼", "huggies": "Bebés 🍼", "pampers": "Bebés 🍼", "cerelac": "Bebés 🍼"
-        };
+  var UNITS = { kg: 1, kilo: 1, kilos: 1, g: 1, gr: 1, gramos: 1,
+                l: 1, lt: 1, litro: 1, litros: 1, ml: 1,
+                pieza: 1, piezas: 1, pz: 1,
+                paquete: 1, paquetes: 1, docena: 1, docenas: 1,
+                lata: 1, latas: 1, bolsa: 1, bolsas: 1, caja: 1, cajas: 1 };
 
-        const App = {
-            config: { 
-                broker: 'wss://broker.hivemq.com:8884/mqtt',
-                // Pinned sync library, loaded only for shared lists, after the list is on screen.
-                // The integrity hash makes the browser refuse any altered copy.
-                mqttLib: {
-                    src: 'https://unpkg.com/mqtt@5.16.0/dist/mqtt.min.js',
-                    integrity: 'sha384-9WWboT9UtuPFRlOLq4FygQkcJxzYcpz8SXGkNyCEXM+44n14xzjNlrRKYZwuF/A6'
-                },
-                indexLocal: 'listolista_index_local',
-                indexShared: 'listolista_index_shared',
-                storePrefix: 'listolista_data_'
-            },
-            
-            state: { 
-                items: [], // { id, text, category, done, deleted, timestamp, lastAuthor }
-                meta: { title: "NUEVA LISTA", timestamp: 0, lastAuthor: "" }
-            },
-            
-            myId: localStorage.getItem('listolista_username') || 'User_' + Math.floor(Math.random() * 1000),
-            peers: {},
-            client: null,
-            roomId: null,
-            isShared: false,
-            sortMode: 'time', // time | asc | desc | aisle
+  var NUM_WORDS = { un: 1, una: 1, uno: 1, medio: 1, media: 1,
+                    dos: 1, tres: 1, cuatro: 1, cinco: 1,
+                    seis: 1, siete: 1, ocho: 1, nueve: 1, diez: 1 };
 
-            init() {
-                this.cacheDOM();
-                this.detectMode();
-                this.load(); 
-                this.bind();
-                
-                this.render();
-                this.dom.i1.focus();
+  /* ---------- fold ---------- */
+  function fold(text) {
+    // 1. lowercase
+    text = text.toLowerCase();
+    // 2. NFD + strip combining marks; also ñ -> n
+    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/g, 'n');
+    // 3+4. decimal comma/dot between digits stays, everything else non-alnum/slash -> space
+    //       single pass so the dot from step 3 is not eaten by step 4
+    text = text.replace(/(\d)[.,](\d)|[^a-z0-9\/]/g, function (m, d1, d2) {
+      return d1 !== undefined ? d1 + '.' + d2 : ' ';
+    });
+    // 5. collapse & trim
+    return text.replace(/  +/g, ' ').trim();
+  }
 
-                if (this.isShared) {
-                    this.startSync();
-                    window.addEventListener('online', () => { if (!this.client) this.startSync(); });
-                }
-            },
+  /* ---------- stripQuantity ---------- */
+  function stripQuantity(s) {
+    var unitsRe = '(?:' + Object.keys(UNITS).join('|') + ')';
+    var numWordRe = '(?:' + Object.keys(NUM_WORDS).join('|') + ')';
+    var num = '(?:\\d+/\\d+|\\d+\\.\\d+|\\d+)';
+    var qty = num + '\\b(?:\\s+' + unitsRe + '\\b)?(?:\\s+de)?';
+    var qtyWord = numWordRe + '(?:\\s+' + unitsRe + '\\b)(?:\\s+de)?';
+    var startRe = new RegExp('^\\s*(?:(' + qty + '|' + qtyWord + ')\\s*)(.*)');
+    var endRe = new RegExp('^(.*)\\s*(?:(' + qty + '|' + qtyWord + '))\\s*$');
 
-            // Unguessable id for new shared lists (old links keep working).
-            randomId() {
-                const b = new Uint8Array(16);
-                crypto.getRandomValues(b);
-                return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
-            },
+    // try removing from the start
+    var m = s.match(startRe);
+    if (m && m[2] && m[2].trim()) return m[2].trim();
 
-            setConn(status) {
-                const dot = document.getElementById('conn-dot');
-                if (!dot) return;
-                dot.classList.toggle('green', status === 'online');
-                dot.classList.toggle('orange', status !== 'online');
-            },
+    // try removing from the end
+    m = s.match(endRe);
+    if (m && m[1] && m[1].trim()) return m[1].trim();
 
-            loadMqtt() {
-                if (window.mqtt) return Promise.resolve();
-                if (this.mqttLoading) return this.mqttLoading;
-                this.mqttLoading = new Promise((resolve, reject) => {
-                    const s = document.createElement('script');
-                    s.src = this.config.mqttLib.src;
-                    s.integrity = this.config.mqttLib.integrity;
-                    s.crossOrigin = 'anonymous';
-                    s.onload = () => resolve();
-                    s.onerror = () => { this.mqttLoading = null; s.remove(); reject(new Error('mqtt load failed')); };
-                    document.head.appendChild(s);
-                });
-                return this.mqttLoading;
-            },
+    return s;
+  }
 
-            startSync() {
-                this.setConn('connecting');
-                this.loadMqtt()
-                    .then(() => this.connectMQTT())
-                    .catch(() => {
-                        this.setConn('offline');
-                        this.showToast('Sin conexión: tus cambios se guardan aquí');
-                    });
-            },
+  /* ---------- singular candidates ---------- */
+  function singulars(word) {
+    var cands = [word];
+    if (word.length > 1 && word[word.length - 1] === 's') {
+      cands.push(word.slice(0, -1));
+      if (word.length > 2 && word.slice(-2) === 'es') {
+        cands.push(word.slice(0, -2));
+      }
+    }
+    if (word.length > 3 && word.slice(-3) === 'ces') {
+      cands.push(word.slice(0, -3) + 'z');
+    }
+    return cands;
+  }
 
-            cacheDOM() {
-                this.dom = {
-                    title: document.getElementById('title'),
-                    i1: document.getElementById('i1'),
-                    i2: document.getElementById('i2'),
-                    pBox: document.getElementById('pending-box'),
-                    cBox: document.getElementById('completed-box'),
-                    peerList: document.getElementById('peer-list'),
-                    localList: document.getElementById('list-local-container'),
-                    sharedList: document.getElementById('list-shared-container'),
-                    toast: document.getElementById('toast'),
-                    overlay: document.getElementById('connect-overlay'),
-                    sortBadge: document.getElementById('sort-badge'),
-                    aisleBadge: document.getElementById('aisle-badge'),
-                    mLib: document.getElementById('modal-library'),
-                    btnShare: document.getElementById('btn-share')
-                };
-            },
+  /* ---------- Damerau-Levenshtein distance ---------- */
+  function dl(a, b) {
+    var m = a.length, n = b.length;
+    if (Math.abs(m - n) > 2) return 99;
+    var d = [];
+    for (var i = 0; i <= m; i++) { d[i] = [i]; }
+    for (var j = 0; j <= n; j++) { d[0][j] = j; }
+    for (var i = 1; i <= m; i++) {
+      for (var j = 1; j <= n; j++) {
+        var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1,
+                           d[i - 1][j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost);
+        }
+      }
+    }
+    return d[m][n];
+  }
 
-            detectMode() {
-                const params = new URLSearchParams(window.location.search);
-                const room = params.get('room');
-                const localId = params.get('local');
+  /* ---------- buildIndex ---------- */
+  function buildIndex(dict) {
+    var index = { aisles: {}, singles: {} };
+    for (var aid in dict) {
+      index.aisles[aid] = [];
+      for (var i = 0; i < dict[aid].length; i++) {
+        var ft = fold(dict[aid][i]);
+        index.aisles[aid].push(ft);
+        var words = ft.split(' ');
+        if (words.length === 1) {
+          if (!index.singles[ft]) index.singles[ft] = [];
+          index.singles[ft].push(aid);
+        }
+      }
+    }
+    return index;
+  }
 
-                if (room) {
-                    this.isShared = true;
-                    this.roomId = room;
-                    this.topics = {
-                        data: `listolista/v2/${room}/data`
-                    };
-                    this.updateLibraryIndex(this.config.indexShared, room);
-                } else {
-                    this.isShared = false;
-                    this.roomId = localId || localStorage.getItem('last_local_id') || 'local_' + Date.now();
-                    
-                    if (!localId) {
-                        try {
-                            const newUrl = window.location.pathname + '?local=' + this.roomId;
-                            window.history.replaceState(null, null, newUrl);
-                        } catch (e) { console.warn("Hist. update failed", e); }
-                    }
-                    
-                    localStorage.setItem('last_local_id', this.roomId);
-                    this.updateLibraryIndex(this.config.indexLocal, this.roomId);
-                }
-            },
+  /* ---------- aisleOf ---------- */
+  function aisleOf(text, index, overrides) {
+    var key = stripQuantity(fold(text));
+    if (!key) return { id: 'OTR', term: null, guess: false };
 
-            bind() {
-                [this.dom.i1, this.dom.i2].forEach(input => {
-                    input.onkeydown = e => { if (e.key === 'Enter') this.addItem(input); };
-                    input.onblur = () => { if(input.value.trim()) this.addItem(input); };
-                });
+    // step 2 – overrides
+    if (overrides && Object.prototype.hasOwnProperty.call(overrides, key)) {
+      return { id: overrides[key], term: key, guess: false };
+    }
 
-                this.dom.title.oninput = () => {
-                    this.state.meta.title = this.dom.title.innerText;
-                    this.state.meta.timestamp = Date.now();
-                    const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
-                    this.updateLibraryIndex(key, this.roomId);
-                    this.save();
-                    if(this.isShared) this.publishState();
-                };
-                
-                this.dom.title.onkeydown = (e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); this.dom.title.blur(); }
-                };
+    var words = key.split(' ');
 
-                document.getElementById('btn-library').onclick = () => {
-                    this.renderLibrary();
-                    this.toggleModal('mLib');
-                };
-                
-                document.getElementById('btn-share').onclick = () => {
-                    if (!this.isShared) {
-                        if(confirm("¿Convertir esta lista en compartida?")) {
-                            const newRoomId = 'room_' + this.randomId();
-                            const currentData = JSON.stringify(this.state);
-                            localStorage.setItem(this.config.storePrefix + newRoomId, currentData);
-                            try {
-                                const newUrl = window.location.origin + window.location.pathname + '?room=' + newRoomId;
-                                navigator.clipboard.writeText(newUrl);
-                                alert("Lista compartida creada. Enlace copiado al portapapeles.");
-                                window.location.search = '?room=' + newRoomId;
-                            } catch (e) { window.location.reload(); }
-                        }
-                    } else {
-                        navigator.clipboard.writeText(window.location.href);
-                        this.showToast("🔗 Enlace de sala copiado");
-                    }
-                };
+    // step 3 – whole-word phrase scan
+    var best = null; // { aisle, term, wc, pos }
+    var allAisleIds = Object.keys(index.aisles);
+    for (var ai = 0; ai < allAisleIds.length; ai++) {
+      var aid = allAisleIds[ai];
+      var terms = index.aisles[aid];
+      for (var ti = 0; ti < terms.length; ti++) {
+        var tw = terms[ti].split(' ');
+        var twc = tw.length;
+        if (twc > words.length) continue;
 
-                // SORTING LOGIC
-                document.getElementById('btn-sort').onclick = () => {
-                    this.sortMode = (this.sortMode === 'time') ? 'asc' : (this.sortMode === 'asc') ? 'desc' : 'time';
-                    this.dom.aisleBadge.innerText = "";
-                    this.render();
-                };
+        // skip filler-only terms
+        var allFiller = true;
+        for (var f = 0; f < twc; f++) { if (!Object.prototype.hasOwnProperty.call(FILLERS, tw[f])) { allFiller = false; break; } }
+        if (allFiller) continue;
 
-                document.getElementById('btn-aisle').onclick = () => {
-                    this.sortMode = (this.sortMode === 'aisle') ? 'time' : 'aisle';
-                    this.dom.sortBadge.innerText = "";
-                    this.render();
-                };
+        var bestPos = -1;
+        var maxEnd = words.length - twc + 1;
+        for (var pos = 0; pos < maxEnd; pos++) {
+          var ok = true;
+          for (var j = 0; j < twc; j++) {
+            var cand = singulars(words[pos + j]);
+            if (cand.indexOf(tw[j]) === -1) { ok = false; break; }
+          }
+          if (ok) {
+            if (bestPos === -1) bestPos = pos;
+            break; // leftmost position for this term
+          }
+        }
+        if (bestPos !== -1) {
+          if (!best || twc > best.wc || (twc === best.wc && bestPos < best.pos)) {
+            best = { aisle: aid, term: terms[ti], wc: twc, pos: bestPos };
+          }
+        }
+      }
+    }
+    if (best) {
+      return { id: best.aisle, term: best.term, guess: false };
+    }
 
-                document.getElementById('btn-new-local').onclick = () => {
-                    const newId = 'local_' + Date.now();
-                    window.location.search = '?local=' + newId;
-                };
+    // step 4 – typo fallback
+    var maxDist = 1;
+    // for 8+ letter words allow distance 2
+    var bestDist = 99;
+    var bestAisle = null;
+    var bestTerm = null;
+    var foundAny = false;
 
-                document.getElementById('close-library').onclick = () => this.dom.mLib.classList.add('hidden');
-
-                document.getElementById('btn-clear').onclick = () => {
-                    let changed = false;
-                    this.state.items.forEach(i => {
-                        if (i.done && !i.deleted) {
-                            i.deleted = true;
-                            i.timestamp = Date.now();
-                            changed = true;
-                        }
-                    });
-                    if (changed) {
-                        this.state.meta.timestamp = Date.now();
-                        this.save(); 
-                        if(this.isShared) this.publishState();
-                        this.render();
-                    }
-                };
-                
-                document.getElementById('btn-wipe').onclick = () => {
-                    if(confirm("¿Borrar todo?")) {
-                        let changed = false;
-                        this.state.items.forEach(i => {
-                            if (!i.deleted) {
-                                i.deleted = true;
-                                i.timestamp = Date.now();
-                                changed = true;
-                            }
-                        });
-                        if (changed) {
-                            this.state.meta.timestamp = Date.now();
-                            this.save(); 
-                            if(this.isShared) this.publishState();
-                            this.render();
-                        }
-                    }
-                };
-
-                document.getElementById('btn-join-manual').onclick = () => {
-                    const id = document.getElementById('input-join-id').value.trim();
-                    if(id) window.location.search = '?room=' + id;
-                };
-            },
-
-            // --- CATEGORIZATION ENGINE ---
-            normalize(str) {
-                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-            },
-
-            categorize(text) {
-                const norm = this.normalize(text);
-                
-                // 1. Exact Match
-                if (SUPERMARKET_DICT[norm]) return SUPERMARKET_DICT[norm];
-
-                // 2. Prioritize longer key matches
-                const keys = Object.keys(SUPERMARKET_DICT).sort((a, b) => b.length - a.length);
-                
-                for (const key of keys) {
-                    if (norm.includes(key)) return SUPERMARKET_DICT[key];
-                }
-
-                return null;
-            },
-
-            // --- CORE LOGIC ---
-            addItem(inputEl) {
-                const txt = inputEl.value.trim();
-                if (!txt) return;
-
-                const cat = this.categorize(txt);
-
-                this.state.items.push({
-                    id: Date.now(),
-                    text: txt,
-                    category: cat,
-                    done: false,
-                    deleted: false,
-                    timestamp: Date.now(),
-                    lastAuthor: this.myId
-                });
-
-                inputEl.value = '';
-                inputEl.focus();
-                this.save();
-                if(this.isShared) this.publishState();
-                this.render();
-            },
-
-            toggleItem(id) {
-                const item = this.state.items.find(i => i.id === id);
-                if (item) {
-                    item.done = !item.done;
-                    item.timestamp = Date.now(); 
-                    this.save();
-                    if(this.isShared) this.publishState();
-                    this.render();
-                }
-            },
-
-            deleteItem(id, e) {
-                e.stopPropagation();
-                const item = this.state.items.find(i => i.id === id);
-                if (item) {
-                    item.deleted = true;
-                    item.timestamp = Date.now(); 
-                    this.state.meta.timestamp = Date.now();
-                    this.save();
-                    if(this.isShared) this.publishState();
-                    this.render();
-                }
-            },
-
-            connectMQTT() {
-                if (this.client) return;
-                this.client = mqtt.connect(this.config.broker, { reconnectPeriod: 2000, connectTimeout: 10000 });
-
-                this.client.on('connect', () => {
-                    this.setConn('online');
-                    this.synced = false;
-                    this.client.subscribe(this.topics.data);
-                    // The broker sends its stored copy right after subscribing. If none arrives,
-                    // this list is new on the broker: publish ours.
-                    clearTimeout(this.snapTimer);
-                    this.snapTimer = setTimeout(() => {
-                        if (this.synced) return;
-                        this.synced = true;
-                        if (this.state.items.length > 0 || this.pendingPublish) this.publishState();
-                    }, 2500);
-                });
-                this.client.on('offline', () => this.setConn('offline'));
-                this.client.on('close', () => this.setConn('offline'));
-
-                this.client.on('message', (topic, msg) => {
-                    if (topic !== this.topics.data) return;
-                    try { this.handleSync(JSON.parse(msg.toString())); } catch(e) {}
-                });
-            },
-
-            handleSync(remoteState) {
-                if (!remoteState || !Array.isArray(remoteState.items)) return;
-                let changed = false;
-                let localNewer = false;
-
-                // Does this phone hold anything the stored copy lacks? Then publish the merge.
-                const remoteMap = new Map(remoteState.items.map(i => [i.id, i]));
-                this.state.items.forEach(lItem => {
-                    const rItem = remoteMap.get(lItem.id);
-                    if (!rItem || lItem.timestamp > rItem.timestamp) localNewer = true;
-                });
-
-                const rMeta = remoteState.meta || {};
-                if ((rMeta.timestamp || 0) > (this.state.meta.timestamp || 0)) {
-                    this.state.meta = rMeta;
-                    this.dom.title.innerText = rMeta.title || "NUEVA LISTA";
-                    const key = this.isShared ? this.config.indexShared : this.config.indexLocal;
-                    this.updateLibraryIndex(key, this.roomId);
-                    changed = true;
-                } else if ((this.state.meta.timestamp || 0) > (rMeta.timestamp || 0)) {
-                    localNewer = true;
-                }
-
-                const localMap = new Map(this.state.items.map(i => [i.id, i]));
-                remoteState.items.forEach(rItem => {
-                    const lItem = localMap.get(rItem.id);
-                    if (!lItem || rItem.timestamp > lItem.timestamp) {
-                        localMap.set(rItem.id, rItem);
-                        changed = true;
-                    }
-                });
-
-                if (changed) {
-                    this.state.items = Array.from(localMap.values());
-                    this.save();
-                    this.render();
-                }
-
-                const firstSnapshot = !this.synced;
-                this.synced = true;
-                clearTimeout(this.snapTimer);
-                if (localNewer || (firstSnapshot && this.pendingPublish)) this.publishState();
-            },
-
-            publishState() {
-                // Offline or not yet merged with the stored copy: keep the change here;
-                // it is published after the next merge.
-                if (!this.client || !this.client.connected || !this.synced) {
-                    this.pendingPublish = true;
-                    return;
-                }
-                this.pendingPublish = false;
-                this.client.publish(this.topics.data, JSON.stringify(this.state), { retain: true });
-            },
-
-            save() {
-                localStorage.setItem(this.config.storePrefix + this.roomId, JSON.stringify(this.state));
-            },
-
-            load() {
-                const data = localStorage.getItem(this.config.storePrefix + this.roomId);
-                if (data) {
-                    try { this.state = JSON.parse(data); } catch(e) {}
-                }
-                this.dom.title.innerText = this.state.meta.title || "NUEVA LISTA";
-            },
-
-            updateLibraryIndex(indexKey, id) {
-                let index = JSON.parse(localStorage.getItem(indexKey) || '{}');
-                index[id] = {
-                    title: this.state.meta.title || "Sin Título",
-                    lastVisited: Date.now()
-                };
-                localStorage.setItem(indexKey, JSON.stringify(index));
-            },
-
-            renderLibrary() {
-                const renderCol = (key, containerId, isSharedCol) => {
-                    const index = JSON.parse(localStorage.getItem(key) || '{}');
-                    const container = document.getElementById(containerId);
-                    container.innerHTML = '';
-                    
-                    const sorted = Object.keys(index).sort((a,b) => index[b].lastVisited - index[a].lastVisited);
-                    if(sorted.length === 0) container.innerHTML = '<div style="color:#aaa;font-size:0.8rem;padding:5px;">Vacío</div>';
-
-                    sorted.forEach(rid => {
-                        const meta = index[rid];
-                        const div = document.createElement('div');
-                        div.className = `saved-room ${rid === this.roomId ? 'active-room' : ''}`;
-                        const strong = document.createElement('strong');
-                        strong.textContent = meta.title;
-                        div.appendChild(strong);
-                        div.onclick = () => {
-                            const param = isSharedCol ? 'room' : 'local';
-                            window.location.search = `?${param}=${rid}`;
-                        };
-                        container.appendChild(div);
-                    });
-                };
-
-                renderCol(this.config.indexLocal, 'list-local-container', false);
-                renderCol(this.config.indexShared, 'list-shared-container', true);
-            },
-
-            render() {
-                this.dom.pBox.innerHTML = '';
-                this.dom.cBox.innerHTML = '';
-
-                let pending = this.state.items.filter(i => !i.done && !i.deleted);
-                const completed = this.state.items.filter(i => i.done && !i.deleted).sort((a,b) => b.timestamp - a.timestamp);
-
-                if (this.sortMode === 'aisle') {
-                    this.dom.aisleBadge.innerText = "ON";
-                    this.dom.sortBadge.innerText = "";
-                    
-                    const grouped = {};
-                    pending.forEach(i => {
-                        const cat = i.category || "Otros 🛒";
-                        if(!grouped[cat]) grouped[cat] = [];
-                        grouped[cat].push(i);
-                    });
-                    
-                    Object.keys(grouped).sort().forEach(cat => {
-                        const header = document.createElement('div');
-                        header.className = 'aisle-header';
-                        header.innerText = cat;
-                        this.dom.pBox.appendChild(header);
-                        
-                        grouped[cat].forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
-                    });
-                    
-                } else {
-                    this.dom.aisleBadge.innerText = "";
-                    
-                    if (this.sortMode === 'asc') {
-                        pending.sort((a,b) => a.text.localeCompare(b.text));
-                        this.dom.sortBadge.innerText = "A-Z";
-                    } else if (this.sortMode === 'desc') {
-                        pending.sort((a,b) => b.text.localeCompare(a.text));
-                        this.dom.sortBadge.innerText = "Z-A";
-                    } else {
-                        pending.sort((a,b) => a.timestamp - b.timestamp);
-                        this.dom.sortBadge.innerText = "";
-                    }
-                    
-                    pending.forEach(i => this.dom.pBox.appendChild(this.createRow(i)));
-                }
-
-                completed.forEach(i => this.dom.cBox.appendChild(this.createRow(i)));
-                this.renderPeers();
-            },
-
-            createRow(item) {
-                const div = document.createElement('div');
-                div.className = `row ${item.done ? 'done' : ''}`;
-                div.onclick = () => this.toggleItem(item.id);
-
-                const content = document.createElement('div');
-                content.className = 'item-content';
-                
-                const txt = document.createElement('div');
-                txt.className = 'txt';
-                txt.textContent = item.text;
-                content.appendChild(txt);
-
-                if(item.category) {
-                    const cat = document.createElement('div');
-                    cat.className = 'cat-tag';
-                    cat.textContent = item.category;
-                    content.appendChild(cat);
-                }
-
-                const del = document.createElement('div');
-                del.className = 'del';
-                del.innerHTML = '&times;';
-                del.onclick = (e) => this.deleteItem(item.id, e);
-
-                div.append(content, del);
-                return div;
-            },
-
-            renderPeers() {
-                if (!this.isShared) return;
-                // Since user modal is gone, we don't render peers list visibly anymore
-                // but we keep the logic in case we want to show count later.
-            },
-
-            toggleModal(key) {
-                const el = this.dom[key];
-                if (el.classList.contains('hidden')) el.classList.remove('hidden');
-                else el.classList.add('hidden');
-            },
-
-            showToast(msg) {
-                this.dom.toast.textContent = msg;
-                this.dom.toast.classList.add('show');
-                setTimeout(() => this.dom.toast.classList.remove('show'), 2000);
+    for (var wi = 0; wi < words.length; wi++) {
+      if (words[wi].length < 5) continue;
+      var limit = words[wi].length >= 8 ? 2 : 1;
+      for (var st in index.singles) {
+        if (!Object.prototype.hasOwnProperty.call(index.singles, st)) continue;
+        var dist = dl(words[wi], st);
+        if (dist > limit) continue;
+        if (dist > bestDist) continue;
+        foundAny = true;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestAisle = index.singles[st].slice();
+          bestTerm = st;
+        } else if (dist === bestDist) {
+          // merge aisles – copy first so we don't mutate the index
+          var merged = bestAisle.slice();
+          for (var k = 0; k < index.singles[st].length; k++) {
+            var a = index.singles[st][k];
+            var already = false;
+            for (var l = 0; l < merged.length; l++) {
+              if (merged[l] === a) { already = true; break; }
             }
-        };
+            if (!already) merged.push(a);
+          }
+          bestAisle = merged;
+        }
+      }
+    }
 
-        App.init();
-    </script>
+    if (foundAny && bestAisle && bestAisle.length === 1) {
+      return { id: bestAisle[0], term: bestTerm, guess: true };
+    }
+
+    // step 5
+    return { id: 'OTR', term: null, guess: false };
+  }
+
+  /* ---------- AISLES list ---------- */
+  var AISLES = [
+    { id: 'FRU', name: 'Frutas y verduras' },
+    { id: 'PAN', name: 'Panadería y tortillería' },
+    { id: 'CAR', name: 'Carnes y salchichonería' },
+    { id: 'LAC', name: 'Lácteos y huevo' },
+    { id: 'CON', name: 'Congelados' },
+    { id: 'DES', name: 'Despensa' },
+    { id: 'BOT', name: 'Botanas y dulces' },
+    { id: 'BEB', name: 'Bebidas y licores' },
+    { id: 'LIM', name: 'Limpieza y hogar' },
+    { id: 'HIG', name: 'Higiene personal' },
+    { id: 'FAR', name: 'Farmacia' },
+    { id: 'BBE', name: 'Bebés' },
+    { id: 'MAS', name: 'Mascotas' },
+    { id: 'OTR', name: 'Otros' }
+  ];
+
+  return { fold: fold, stripQuantity: stripQuantity,
+           buildIndex: buildIndex, aisleOf: aisleOf, AISLES: AISLES };
+})();
+
+</script>
+<script>
+// ListoLista merge: combine this phone's copy of a list with a copy from another phone.
+// Plain script (no modules, no libraries): defines the global `ListoMerge`.
+// Runs in browsers and in macOS `jsc` (tests: tests/run.sh).
+//
+// SPEC
+// A list state looks like:
+//   { items: [{ id, text, done, deleted, timestamp, ... }],
+//     meta:  { title, timestamp },
+//     ovr:   { "<folded item name>": { aisle: "<AISLE_ID>", ts: <number> }, ... },   // optional
+//     order: { ids: ["FRU", "PAN", ...], ts: <number> } }                              // optional
+// Deleted items stay in the list with deleted: true (so the deletion can travel to other phones).
+// A missing timestamp/ts counts as 0. A missing items array counts as empty.
+//
+// ListoMerge.merge(local, remote) -> { state, changed, localNewer }
+//   items: union by id. For an id present in both, the copy with the LARGER timestamp wins;
+//          on a tie the local copy stays. Order: local items keep their order; items only in
+//          remote are appended in remote order.
+//   meta:  the one with the larger meta.timestamp wins; tie -> local. Missing meta -> the other.
+//   ovr:   per key, the entry with the larger ts wins; tie -> local. Omit ovr from the result
+//          when both sides lack it.
+//   order: the whole object with the larger ts wins; tie -> local. Omit when both lack it.
+//   Other top-level fields of local are kept as they are.
+//   changed:    true when some remote entry (item, meta, ovr key, order) is missing from local or
+//               has a strictly larger timestamp/ts (something came from remote).
+//   localNewer: true when some local entry is missing from remote or has a strictly larger
+//               timestamp/ts (so this phone should publish). Ties count as neither.
+//   Never modify the input objects (return new objects/arrays; item objects may be shared).
+//   Must accept remote = null/undefined (treat as an empty state).
+
+var ListoMerge = (function () {
+  'use strict';
+
+  function getTs(obj, field) {
+    // Missing timestamp / ts counts as 0.
+    return (obj && obj[field] != null) ? obj[field] : 0;
+  }
+
+  function merge(local, remote) {
+    var changed = false;
+    var localNewer = false;
+
+    // Must accept remote = null/undefined (treat as empty state).
+    if (!remote) { remote = {}; }
+
+    var state = {};
+
+    // --- items ---
+    var localItems = local.items || [];
+    var remoteItems = remote.items || [];
+
+    // Build lookup indices (keys are item ids).
+    var localIdx = {};
+    for (var i = 0; i < localItems.length; i++) {
+      localIdx[localItems[i].id] = i;
+    }
+    var remoteIdx = {};
+    for (var j = 0; j < remoteItems.length; j++) {
+      remoteIdx[remoteItems[j].id] = j;
+    }
+
+    // Merge: local items keep their order; remote-only appended in remote order.
+    var mergedItems = [];
+    for (var i = 0; i < localItems.length; i++) {
+      var li = localItems[i];
+      if (Object.prototype.hasOwnProperty.call(remoteIdx, li.id)) {
+        var ri = remoteItems[remoteIdx[li.id]];
+        var lTs = getTs(li, 'timestamp');
+        var rTs = getTs(ri, 'timestamp');
+        if (rTs > lTs) {
+          mergedItems.push(ri);
+          changed = true;
+        } else {
+          mergedItems.push(li);
+          if (lTs > rTs) { localNewer = true; }
+        }
+      } else {
+        // Item only in local.
+        mergedItems.push(li);
+        localNewer = true;
+      }
+    }
+    for (var j = 0; j < remoteItems.length; j++) {
+      var ri = remoteItems[j];
+      if (!Object.prototype.hasOwnProperty.call(localIdx, ri.id)) {
+        // Item only in remote.
+        mergedItems.push(ri);
+        changed = true;
+      }
+    }
+    state.items = mergedItems;
+
+    // --- meta ---
+    var lMeta = local.meta;
+    var rMeta = remote.meta;
+    if (lMeta && rMeta) {
+      var lTs = getTs(lMeta, 'timestamp');
+      var rTs = getTs(rMeta, 'timestamp');
+      // The winning meta is kept whole (it may carry more fields than title/timestamp).
+      if (rTs > lTs) {
+        state.meta = rMeta;
+        changed = true;
+      } else {
+        state.meta = lMeta;
+        if (lTs > rTs) { localNewer = true; }
+      }
+    } else if (rMeta) {
+      state.meta = rMeta;
+      changed = true;
+    } else if (lMeta) {
+      state.meta = lMeta;
+      localNewer = true;   // remote lacks it
+    }
+
+    // --- ovr (aisle corrections) ---
+    var lOvr = local.ovr;
+    var rOvr = remote.ovr;
+    if (lOvr || rOvr) {
+      var mergedOvr = {};
+      if (lOvr) {
+        for (var k in lOvr) {
+          if (Object.prototype.hasOwnProperty.call(lOvr, k)) {
+            // Key only in local (remote lacks it).
+            if (!rOvr || !Object.prototype.hasOwnProperty.call(rOvr, k)) {
+              localNewer = true;
+            }
+            mergedOvr[k] = { aisle: lOvr[k].aisle, ts: getTs(lOvr[k], 'ts') };
+          }
+        }
+      }
+      if (rOvr) {
+        for (var k in rOvr) {
+          if (Object.prototype.hasOwnProperty.call(rOvr, k)) {
+            if (Object.prototype.hasOwnProperty.call(mergedOvr, k)) {
+              var lTs = mergedOvr[k].ts;
+              var rTs = getTs(rOvr[k], 'ts');
+              if (rTs > lTs) {
+                mergedOvr[k] = { aisle: rOvr[k].aisle, ts: rTs };
+                changed = true;
+              } else if (lTs > rTs) {
+                localNewer = true;
+              }
+            } else {
+              // Key only in remote (local lacks it).
+              changed = true;
+              mergedOvr[k] = { aisle: rOvr[k].aisle, ts: getTs(rOvr[k], 'ts') };
+            }
+          }
+        }
+      }
+      state.ovr = mergedOvr;
+    }
+
+    // --- order (aisle order) ---
+    var lOrd = local.order;
+    var rOrd = remote.order;
+    if (lOrd || rOrd) {
+      if (lOrd && rOrd) {
+        var lTs = getTs(lOrd, 'ts');
+        var rTs = getTs(rOrd, 'ts');
+        if (rTs > lTs) {
+          state.order = { ids: rOrd.ids.slice(), ts: rTs };
+          changed = true;
+        } else if (lTs > rTs) {
+          state.order = { ids: lOrd.ids.slice(), ts: lTs };
+          localNewer = true;
+        } else {
+          state.order = { ids: lOrd.ids.slice(), ts: lTs };
+        }
+      } else if (lOrd) {
+        state.order = { ids: lOrd.ids.slice(), ts: getTs(lOrd, 'ts') };
+        localNewer = true;
+      } else {
+        state.order = { ids: rOrd.ids.slice(), ts: getTs(rOrd, 'ts') };
+        changed = true;
+      }
+    }
+
+    // --- other local fields preserved as-is ---
+    var stdKeys = { items: true, meta: true, ovr: true, order: true };
+    for (var k in local) {
+      if (!stdKeys[k]) {
+        state[k] = local[k];
+      }
+    }
+
+    return { state: state, changed: changed, localNewer: localNewer };
+  }
+
+  return { merge: merge };
+})();
+
+</script>
+<script>
+// ListoLista sync: end-to-end encryption + the phone side of the relay connection.
+// Plain script (no modules, no libraries): defines the global `ListoSync`. Browser and Node 22+.
+//
+// A shared list's link carries a random 128-bit secret after '#k=' (browsers never send the part
+// after '#' to any server). From it each phone derives, locally:
+//   roomId  22 characters, SHA-256 of the secret: names the list on the relay
+//   key     AES-GCM-256 via HKDF: encrypts the whole list (title, items, flags)
+//   tok     128-bit write token via HKDF: the relay only accepts writes carrying it
+// The relay stores and forwards only opaque blobs "v1.<iv>.<ciphertext>" (padded to 1 KB steps,
+// so it can't even count items).
+var ListoSync = (function () {
+  'use strict';
+  var enc = new TextEncoder(), dec = new TextDecoder();
+  var PAD = 1024;
+
+  function b64u(buf) {
+    var bytes = new Uint8Array(buf), s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64u(str) {
+    var s = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function concat(a, b) { var o = new Uint8Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; }
+
+  function newSecret() { return b64u(crypto.getRandomValues(new Uint8Array(16))); }
+
+  async function derive(secret) {
+    var raw = unb64u(secret);
+    if (raw.length !== 16) throw new Error('bad secret');
+    var h = await crypto.subtle.digest('SHA-256', concat(enc.encode('listolista/room/v1'), raw));
+    var roomId = b64u(h).slice(0, 22);
+    var ikm = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey', 'deriveBits']);
+    var salt = enc.encode('listolista');
+    var key = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: salt, info: enc.encode('aes-gcm-256/v1') },
+      ikm, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    var tokBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: salt, info: enc.encode('write-token/v1') }, ikm, 128);
+    return { roomId: roomId, key: key, tok: b64u(tokBits) };
+  }
+
+  function pad(bytes) {
+    var n = 4 + bytes.length, size = Math.ceil(n / PAD) * PAD, out = new Uint8Array(size);
+    new DataView(out.buffer).setUint32(0, bytes.length);
+    out.set(bytes, 4);
+    return out;
+  }
+  function unpad(bytes) {
+    var len = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0);
+    if (len > bytes.length - 4) throw new Error('bad padding');
+    return bytes.subarray(4, 4 + len);
+  }
+
+  async function seal(keys, state) {
+    var iv = crypto.getRandomValues(new Uint8Array(12));   // fresh IV for every message
+    var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode(keys.roomId) },
+      keys.key, pad(enc.encode(JSON.stringify(state))));
+    return 'v1.' + b64u(iv) + '.' + b64u(ct);
+  }
+
+  async function open(keys, blob) {
+    var p = String(blob).split('.');
+    if (p.length !== 3 || p[0] !== 'v1') throw new Error('unknown format');
+    var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64u(p[1]), additionalData: enc.encode(keys.roomId) },
+      keys.key, unb64u(p[2]));
+    return JSON.parse(dec.decode(unpad(new Uint8Array(pt))));
+  }
+
+  // Phone side of the relay. handlers: onRemote(state) -> called with every decrypted copy from
+  // the relay, or with null when the relay holds nothing yet (the app merges it and calls put()
+  // again if it holds newer changes);
+  // onStatus('connecting'|'online'|'offline'); onError(code).
+  function Relay(baseUrl, keys, handlers) {
+    var self = this;
+    var ws = null, v = 0, synced = false, pending = null, sending = false, closed = false;
+    var retry = 0, hb = null, pongTimer = null, retryTimer = null;
+    var status = function (s) { if (handlers.onStatus) handlers.onStatus(s); };
+
+    function connect() {
+      if (closed) return;
+      clearTimeout(retryTimer);
+      status('connecting');
+      try { ws = new WebSocket(baseUrl.replace(/\/$/, '') + '/r/' + keys.roomId); }
+      catch (e) { return schedule(); }
+      ws.onopen = function () { retry = 0; status('online'); heartbeat(); };
+      ws.onmessage = function (e) {
+        if (e.data === 'pong') { clearTimeout(pongTimer); return; }
+        var m; try { m = JSON.parse(e.data); } catch (err) { return; }
+        if (m.t === 'snap' || m.t === 'conflict') {
+          v = m.v; synced = true; sending = false;
+          var done = function () { flush(); };
+          if (m.blob) {
+            open(keys, m.blob).then(function (st) { handlers.onRemote(st); }, function () {
+              if (handlers.onError) handlers.onError('decrypt');
+            }).then(done);
+          } else { handlers.onRemote(null); done(); }   // nothing stored yet: the app may upload
+        } else if (m.t === 'err') {
+          sending = false;
+          if (handlers.onError) handlers.onError(m.code);
+        }
+      };
+      ws.onclose = function () { stopHeartbeat(); synced = false; sending = false; status('offline'); schedule(); };
+      ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    }
+    function schedule() {
+      if (closed) return;
+      var ms = Math.min(15000, 1000 * Math.pow(2, retry++));
+      retryTimer = setTimeout(connect, ms);
+    }
+    function heartbeat() {
+      stopHeartbeat();
+      hb = setInterval(function () {
+        if (!ws || ws.readyState !== 1) return;
+        ws.send('ping');
+        clearTimeout(pongTimer);
+        pongTimer = setTimeout(function () { try { ws.close(); } catch (e) {} }, 10000);
+      }, 25000);
+    }
+    function stopHeartbeat() { clearInterval(hb); clearTimeout(pongTimer); }
+
+    // Send the newest local state once the relay has told us its current version.
+    function flush() {
+      if (!pending || sending || !synced || !ws || ws.readyState !== 1) return;
+      var st = pending; pending = null; sending = true;
+      seal(keys, st).then(function (blob) {
+        if (!ws || ws.readyState !== 1) { pending = pending || st; sending = false; return; }
+        ws.send(JSON.stringify({ t: 'put', base: v, blob: blob, tok: keys.tok }));
+      });
+    }
+
+    self.put = function (state) { pending = state; flush(); };
+    self.reconnectNow = function () {   // e.g. when the phone wakes up: always a fresh connection
+      if (closed) return;
+      retry = 0;
+      if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
+      stopHeartbeat(); synced = false; sending = false;
+      connect();
+    };
+    self.close = function () { closed = true; stopHeartbeat(); clearTimeout(retryTimer); if (ws) try { ws.close(); } catch (e) {} };
+    self.version = function () { return v; };
+    connect();
+  }
+
+  return { newSecret: newSecret, derive: derive, seal: seal, open: open, Relay: Relay, _b64u: b64u, _unb64u: unb64u };
+})();
+if (typeof globalThis !== 'undefined') globalThis.ListoSync = ListoSync;
+
+</script>
+<script>
+var LISTO_RELAY = "";
+var LISTO_DICT_TEXT = "# ListoLista aisle dictionary, Mexican Spanish.\n# One line per aisle: ID: term|term|...  Terms are folded (lowercase, no accents); several words allowed.\n# The matcher (src/aisles.js) prefers the longest phrase, then the leftmost word.\n# After editing, run: python3 tools/check-dict.py\n# Converted 2026-09-25 from the dictionary inside index.html (last duplicate wins, as before);\n# conflicting duplicates to confirm are listed in data/aisles-review.md.\n\nFRU: acelgas|aguacate|aguacates|ajo|albahaca|apio|apios|arandanos|banana|berenjena|betabel|betabeles|brocoli|brocolis|calabacita|calabacitas|calabaza|camote|camotes|cebolla|cebolla morada|champinon|champinones|chayote|chicharo|chicharos|chile|chile ancho|chile cascabel|chile chipotle|chile guajillo|chile habanero|chile jalapeno|chile manzano|chile morron|chile mulato|chile pasilla|chile poblano|chile seco|chile serrano|cilantro|ciruela|ciruelas|coco|cocos|col|col morada|coliflor|coliflores|durazno|duraznos|ejote|ejotes|elote|epazote|esparragos|espinaca|flor de calabaza|flor de jamaica|frambuesa|fresa|fresas|frijol verde|guanabana|guayaba|guayabas|guisante|guisantes|hierbabuena|hongos|huitlacoche|jamaica|jicama|jicamas|jitomate|kiwi|lechuga|lima|limas|limon|limones|mamey|mandarina|mandarinas|mango|mangos|manzana|manzanas|melon|melones|menta|mora azul|naranja|naranjas|nopal|nopales|papa|papaya|papayas|pepino|pepinos|pera|peras|perejil|pimiento|pimiento amarillo|pimiento naranja|pimiento rojo|pimiento verde|pimienton|pina|pinas|platano|platano macho|platanos|quelite|quelites|rabano|rabanos|remolacha|remolachas|repollo|romeritos|romero|sandia|sandias|setas|tamarindo|tomate|tomate verde|toronja|toronjas|tuna|tunas|uva|uvas|verdolaga|verdolagas|yuca|yucas|zanahoria|zarzamora\nPAN: baguette|bimbo|birote|biscocho|bisquets|bizcocho|bolillo|bolillos|chapata|concha|conchas|croissant|cuernito|cuernitos|donas|elote pan|empanadas|garibaldi|harina para hot cakes|hot cakes|mantecadas|marranito|masa|medias noches|mexicano|pambazo|pan|pan arabe|pan blanco|pan bolillo|pan de caja|pan de dulce|pan de muerto|pan dulce|pan hamburguesa|pan hot dog|pan integral|pan molido|pan para hamburguesa|pan para hotdog|pan tostado|panquemado|pastel|polvoron|tamal|telera|teleras|tlaxcala|torta telera|tortillas|tortillas de harina|tortillas de maiz|tortillinas|tostadas\nCAR: aguayon|alas de pollo|albondigas|alitas|almejas|arrachera|atun enlatado|atun fresco|bacalao|bacalao seco|bistec|bistec de higado|bistec de res|bistecs de res|bistek|borrego|calamar|calamares|camaron|camarones|carne|carne ahumada|carne de bovino|carne de cerdo|carne de cerdo molida|carne de ovino|carne de puerco|carne de puerco molida|carne de res|carne de res molida|carne de res para deshebrar|carne molida|carne para asar|carne para bistek|carne para deshebrar|carne para guisar|carne para milanesa|carnero|carnes|cecina|cerdo|chorizo|chuleta|chuleta de cerdo|chuleta de res|corazon|corazon de cerdo|corazon de res|cordero|corte de res|costilla|costilla de cerdo|costilla de res|diesmillo|dorado|espaldilla de cerdo|falda de res|filete|filete de mojarra|filete de pescado|filete de robalo|higado|higado de cerdo|higado de res|huachinango|jamon|jamon de pavo|jamon de pierna|jamon de pollo|jamon serrano|lenguado|lomo de cerdo|longaniza|machaca|mariscos|mejillones|menudencias|milanesa|milanesa de pollo|mix de mariscos|mojarra|molida|molida de res|mortadela|muslo|nuggets|ostras|pancita|pastor|pavo|pavo entero|pechuga|pechuga de pavo|pechuga de pollo|pescado|pescados|pez|pierna|pierna de cerdo|pierna de pavo|pierna de pollo|pierna de res|pollo|pollo rostizado|puerco|pulpo|queso de puerco|res|robalo|salchicha|salchichas|salchichon|salmon|sierra|sirloin|suadero|surimi|tasajo|tilapia|tocino|tocinos|tripas|trucha|visceras\nLAC: actimel|actus|alpura|bebida de almendra|bebida de arroz|bebida de avena|bebida de coco|bebida de soya|bebida lactea|blanquillo|blanquillos|crema acida|crema acidificada|crema agria|crema batida|crema chantilly|crema de leche|crema para batir|crema para bebe|crema para cafe|crema para ninos|danone|danonino|docena de huevo|huevo|huevos|huevos blancos|huevos colorados|huevos de codorniz|huevos de gallina|huevos grandes|huevos organicos|jocoque|kefir|lala|leche|leche almendras|leche de avena|leche de coco|leche de soya|leche descremada|leche deslactosada|leche entera|leche fermentada|leche light|leche sin lactosa|manchego|mantequilla|mantequilla con sal|mantequilla light|mantequilla sin sal|margarina|margarina con sal|margarina light|margarina sin sal|media crema|mozzarella|nata|oaxaca|parmesano|philadelphia|queso|queso amarillo|queso cheddar|queso chihuahua|queso cotija|queso cottage|queso crema|queso de cabra|queso doble crema|queso fresco|queso gouda|queso manchego|queso mozzarella|queso oaxaca|queso panela|queso para derretir|queso parmesano|queso rayado|queso requeson|requeson|suero de leche|yakult|yogur|yogur de soya|yogurt|yogurt de soya|yogurt griego|yogurt natural|yoplait\nCON: \nDES: aceite|aceite canola|aceite de aguacate|aceite de canola|aceite de coco|aceite de girasol|aceite de oliva|aceite en aerosol|aceite oliva|aceite vegetal|aceitunas|achiote|aderezo|aji|aji molido|ajonjoli|albahaca seca|almendras|altramuz|aluminio|ancho|arroz|arroz blanco|arroz integral|arroz precocido|ate|ate de guayaba|ate de membrillo|atun|atun en lata|avena|avena instantanea|azafran|azucar|azucar blanca|azucar glass|azucar mascabado|azucar morena|azucar para hornear|barra cereal|bicarbonato|bicarbonato de sodio|cajeta de celaya|cajeta de leite|caldillo|caldo de pollo|caldo de res|caldo de tomate|caldo res|caldo verduras|canela|canela en rama|canela molida|cascabel|catsup|cereal|chia|chile de arbol molido|chile en polvo|chile piquin|chiles en escabeche|chiles en lata|chiles en vinagre|chiles secos|chipotle|chipotle en adobo|chocolate cocina|chocolate en polvo|chocolate polvo|clavo|clavo de olor|clavos de olor|coditos|comino|comino molido|cominos|condimentos|consome|consome de pollo|consome polvo|crema de cacahuate|crema de mani|cubito de caldo|dulce de coco|dulce de guayaba|dulce de leche|dulce de membrillo|edulcorante|elote en lata|elote enlatado|endulzante|envoltura de plastico|esencia de vainilla|espagueti|especias|extracto de vainilla|fideo|film transparente|frijol|frijol bayo|frijol negro|frijol peruano|frijol pinto|frijol refrito|frijoles|frijoles bayos|frijoles negros|frijoles refritos|fruta enlatada|galletas maria|galletas saladas|garbanzo|garbanzos|granola|grenetina|guajillo|haba|habas|harina|harina de maiz|harina de trigo|harina maiz|hojas de laurel|jengibre|ketchup|kleenex|knorr|knorr suiza|lasana|laurel|leche clavel|leche condensada|leche evaporada|lechera|lenteja|lentejas|levadura|macarron|maiz|maiz palomero|maiz pozolero|maizena|manteca|manteca de cerdo|manteca vegetal|maruchan|masa harina|maseca|mayonesa|mayonesa de aceite de oliva|mayonesa light|mayonesa vegana|mermelada|mermelada de durazno|mermelada de fresa|mermelada de guayaba|mermelada de pina|miel|miel abeja|miel agave|miel de abeja|miel de maguey|miel de maple|miel maple|mole|mostaza|mostaza amarilla|mostaza de grano|mostaza dijon|nixtamal|nuez moscada|nuez moscada molida|nutella|oregano|oregano seco|panela|papel para hornear|pasas|pasilla|pasta|piloncillo|pimienta|pimienta blanca|pimienta cayena|pimienta de jamaica|pimienta entera|pimienta gorda|pimienta molida|pimienta negra|pimienta negra entera|plastico transparente|pollo en polvo|polvo para hornear|pure de tomate|res en polvo|romero seco|royal|sal|sal de grano|sal de mar|sal de mesa|sal kosher|sal marina|sal sin yodo|sal yodada|salmon en lata|salsa|salsa botanera|salsa botella|salsa de soya|salsa de tomate|salsa inglesa|salsa macha|salsa maggi|salsa picante|salsa valentina|sardina|sardina en lata|sardinas|servilleta|sopa|sopa arroz|sopa de letra|sopa de pasta|sopa pasta|spaghetti|stevia|sustituto de azucar|tajin|tomate en polvo|tomillo|tomillo seco|vainilla|vegetales enlatados|verduras en lata|vinagre|vinagre balsamico|vinagre blanco|vinagre de arroz|vinagre de manzana|vinagre de vino|vinagre tinto|vino cocina|zucaritas\nBOT: almendra|barritas|botana|bubulubu|cacahuates|cacahuates japoneses|cajeta|caramelos|carlos v|cheetos|chicharron|chicharrones|chicle|chicles|chitos|chocokrispis|chocolate|chocolate abuelita|chocolate barra|chocolate canela|churro|churros|doritos|dulce|dulce leche|dulces|duvalin|emperador|esquites|ferrero|flan|frituras|fruta seca|galleta dulce|galleta salada|galletas|galletas dulces|galletas marias|gansito|gelatina|gomitas|halls|helado|jericalla|kinder delice|kit kat|lucas|m m|maria|mazapan|mentos|miguelito|milky way|nacho|nieve|nieves|nueces|nuez|nuez de la india|nuez pecana|oreo|paleta|paletas|palomitas|palomitas microondas|panditas|papas|papas fritas|papitas|pelon pelo rico|pepitas|pinguino|pinguinos|pistache|pistaches|postre|pulparindo|rancheritos|ruffles|rufles|sabritas|semilla calabaza|semilla girasol|semillas|skittles|skwinkles|snickers|takis|tamarindo dulce|tostitos|totopos|trident|vero\nBEB: ades|agua|agua de coco|agua de jamaica|agua de sabor|agua de tamarindo|agua embotellada|agua fresca|agua mineral|agua natural|agua purificada|bacardi|bebida deportiva|boing|bonafont|brandy|cafe|cafe soluble|caguama|cerveza|cerveza corona|cervezas|champagne|chelas|cheves|chocolate leche|ciel|clamato|coca|coca cola|cognac|corona|del valle|energetica|epura|fanta|fresca|gatorade|ginebra|horchata|indio|jarritos|jugo|jugo concentrado|jugo de manzana|jugo de naranja|jugo de uva|jugo mango|jugo pina|jugo uva|jugo verde|jumex|kombucha|kool aid|leche en polvo|leche saborizada|licor|limonada|manzanita|mezcal|modelo|monster|naranjada|nescafe|pacifico|penafiel|pepsi|ponche|pulque|red bull|redbull|refresco|refrescos|rompope|ron|sidra|sidral|soda|sol|sprite|sq|tang|te|te de manzanilla|te frio|te helado|tecate|tejuino|tepache|tequila|tinto|valle|victoria|vino|vino blanco|vino tinto|vodka|whisky|zuko\nLIM: aceite para muebles|ajax|ambientador|ambientador automatico|ambientador de aerosol|ambientador de auto|ambientador de bano|ambientador de barras|ambientador de casa|ambientador de closet|ambientador de cocina|ambientador de flores|ambientador de manzana|ambientador de pino|ambientador de vainilla|ambientador electrico|aromatizante|aromatizante de ambiente|aromatizante de auto|aromatizante de bano|aromatizante de closet|aromatizante de cocina|blanqueador|blanqueador en polvo|blanqueador liquido|bolsa de basura|bolsas basura|bolsas de basura|bolsas de basura grandes|bolsas de basura medianas|bolsas de basura negras|bolsas de basura pequenas|bolsas de basura transparentes|bolsas para basura|bolsas para reciclaje|bounty|cera|cera para autos|cera para muebles|cera para pisos|cerillos|cloralex|cloro|cloro en gel|cloro en polvo|cloro liquido|comet|desengrasante|desinfectante|desinfectante de banos|desinfectante de cocina|desinfectante de pisos|desinfectante multiusos|detergente|detergente en polvo|detergente liquido|detergente para lavar platos|detergente para platos|detergente para ropa|detergente para ropa blanca|detergente para ropa de bebe|detergente para ropa de color|detergente para ropa delicada|detergente para trastes|downy|escoba|esponja|esponja de acero|esponja de acero inoxidable|esponja de aluminio|esponja de metal|esponja para cocina|esponja para platos|esponja para trastes|esponjas|estropajo|estropajos|fabuloso|fabuloso multiusos|fibra|fibras|foca|focos|fregadero|glad|guantes|insecticida|jabon|jabon de barra|jabon de lavanderia|jabon de lavar|jabon en polvo|jabon para ropa|jabon para trastes|jaboncillo|jerga|lavatrastes|limpia parabrisas|limpiador|limpiador de banos|limpiador de cocina|limpiador de pisos|limpiador de vidrios|limpiador multiusos|limpiapisos|limpiavidrios|liquido para trastes|lustra muebles|lysol|maestro limpio|panuelo de papel|panuelos de papel|papel aluminio|papel de cocina|papel sanitario|pasta para zapatos|petalo|pinalen|pinalen de pino|pino|pinol|pinol aplas|pinol de pino|plasticos|recogedor|regio|rollos de papel|salvo|scotch brite|servilleta de papel|servilletas|servilletas de papel|shampoo para trastes|suavitel|suavizante|suavizante con aroma|suavizante de ropa|suavizante de telas|suavizante para ropa|toalla de papel|toallas de papel|trapeador|trapero|trapo|trapo de algodon|trapo de cocina|trapo de microfibra|trapo para cocina|trapo para limpiar|trapos|velas\nHIG: aceite de bebe|aceite para cuticulas|acetona|acondicionador|acondicionador de almendras|acondicionador de argan|acondicionador de cabello|acondicionador de coco|acondicionador de keratina|acondicionador de pina|acondicionador para cabello|acondicionador para cabello danado|acondicionador para cabello graso|acondicionador para cabello seco|acondicionador para cabello tenido|aftershave|agua micelar|algodon en bolas|algodon en rollos|base para unas|bastoncillos|bastoncillos de algodon|bloqueador|bloqueador solar|cepillo|cepillo de dientes|cepillo de dientes electrico|cepillo de dientes manual|cepillo dental|cepillo dientes|cepillo pelo|cera para cabello|champu|colgate|colonia|colonia para adultos|colonia para bebe|colonia para ninos|colutorio|compotas|condon|condon con espermicida|condon con retardante|condon con sabores|condon con texturas|condon femenino|condon masculino|contorno de ojos|copa menstrual|copa para menstruacion|corta unas|cortador de unas|cortaunas|cotonetes|cottonetes|crema|crema antiarrugas|crema antiedad|crema corporal|crema de afeitar|crema de ojos|crema hidratante|crema humectante|crema para cara|crema para cuerpo|crema para cuticulas|crema para manos|crema para ojos|crema para peinar|crema para piel|crema para pies|dentifrico|desmaquillante|desmaquillante bifasico|desmaquillante de ojos|desmaquillante en agua|desmaquillante en crema|desodorante|desodorante antitranspirante|desodorante de pies|desodorante en aerosol|desodorante en barra|desodorante en crema|desodorante para axilas|desodorante roll on|desodorante sin alcohol|endurecedor de unas|enjuague bucal|enjuague bucal con alcohol|enjuague bucal sin alcohol|esencia|esmalte|esmalte de unas|espuma|espuma afeitar|espuma de afeitar|espuma para peinar|essence|fortalecedor de unas|fragancia|gel|gel antibacterial|gel de afeitar|gel de bano|gel de piel|gel para cabello|gel para peinar|gillette|hilo dental|hilo dental con fluor|hilo dental de menta|hisopos|hisopos de algodon|hojas de afeitar|hojas para afeitar|jabon corporal|jabon cuerpo|jabon de afeitar|jabon de bano|jabon de piel|jabon de tocador|jabon liquido|kotex|laca|laca para cabello|liga|lima de unas|lima para callos|lima para pies|lima para unas|listerine|locion|locion para piel|lubricante con aroma|lubricante con sabor|lubricante intimo|lubricante para relaciones|lubricante sin aroma|lubricante sin sabor|maquillaje|maquinilla de afeitar|maquinilla de afeitar electrica|maquinilla de afeitar manual|mouse|mouse para cabello|navaja de afeitar|navajas|palmolive|pantiprotector|panuelos|papel de bano|papel higienico|pasta de dientes|pasta de dientes blanqueadora|pasta de dientes para dientes sensibles|pasta dental|perfume|perfume para hombre|perfume para mujer|perfume unisex|piedra para pies|piedra pomez|pinta unas|pintaunas|pomada para cabello|preservativo|preservativo femenino|preservativo masculino|protector diario|protector solar|protector solar con aroma|protector solar con color|protector solar infantil|protector solar para bebe|protector solar para cara|protector solar para cuerpo|protector solar sin aroma|protector solar sin color|q tips|quitaesmalte|rastrillo|rastrillos|rasuradora|removedor de esmalte|rexona|rimel|saba|shampoo|shampoo anticaspa|shampoo para cabello|shampoo para cabello con caspa|shampoo para cabello con resequedad|shampoo para cabello danado|shampoo para cabello graso|shampoo para cabello mixto|shampoo para cabello normal|shampoo para cabello seco|shampoo para cabello tenido|shampoo para cabellos|shampoo para caida del cabello|speed stick|spray para pies|talco corporal|talco de bebe|talco para adultos|talco para bebe|talco para pies|tampon|tampones|tampones con aplicador|tampones de algodon|tampones sin aplicador|tijeras para unas|tinte|toalla femenina|toalla para menstruacion|toalla sanitaria|toallas femeninas|toallas humedas|toallas intimas|toallas sanitarias|toallitas intimas|tonico facial|tonico para piel|top coat para unas|vaselina\nFAR: agua oxigenada|alcohol|alcohol etilico|alcohol isopropilico|algodon|ambroxol|amoxicilina|amoxicilina pediatrica|analgesicos|antidiarreico|antigripal|antihistaminico|aspirina|aspirina infantil|aspirina protect|azitromicina|bacitracina|banditas|bisolvon|bisolvon jarabe|buscapina|buscapina compuesta|buscopan|caolin|caolin con pectina|cefalexina|cetirizina|cinta adhesiva|claritromicina|clenbuterol|clorfenamina|clorfeniramina|clorhexidina|clotrimazol|compresa caliente|compresa fria|condones|crema antibiotica|crema antifungica|crema quemaduras|cubrebocas|cubrebocas n95|cubrebocas quirurgico|curitas|desloratadina|dexametasona|dextrometorfano|diclofenaco|diclofenaco capsulas|diclofenaco gotas|diclofenaco potasico|diclofenaco sodico|diclofenaco tabletas|difenhidramina|dimenhidrinato|dramamin|electrolit|espadrapo|espumisan|fenilefrina|fexofenadina|gasas|gasas esteriles|glucosimetro|gotas oculares|gotas para los ojos|gravol|guaifenesina|hidroxizina|ibuprofeno|ibuprofeno capsulas|ibuprofeno gotas|ibuprofeno infantil|ibuprofeno pediatrico|ibuprofeno tabletas|iodo|jarabe para la tos|jarabe tos|ketoconazol|ketotifeno|ketotifeno oftalmico|lactulosa|lagrimas artificiales|lansoprazol|loperamida|loratadina|mascarilla|mascarilla kn95|mascarilla n95|mascarilla quirurgica|mejoral|mejoralito|metamizol|metamizol sodico|metronidazol|miconazol|micropore|naproxeno|naproxeno sodico|nebulizador|neomicina|omeprazol|omeprazol pediatrico|oximetazolina|oximetro|oximetro de pulso|panal para adulto|panales para adultos|pantoprazol|paracetamol|paracetamol capsulas|paracetamol comprimidos|paracetamol gotas|paracetamol infantil|paracetamol pediatrico|paracetamol tabletas|pastillas para la garganta|pastillas para la tos|pectina|penicilina|penicilina pediatrica|peroxido de hidrogeno|polietilenglicol|polimixina|pomada antibiotica|povidona yodada|preservativos|pseudoefedrina|ranitidina|salbutamol|silla de ruedas|simeticona|spray nasal|suero|suero casero|suero fisiologico|suero oral|suero para bebe|suero para ninos|suero pediatrico|suerox|sulfadiazina de plata|tabcin|tabcin active|tabcin antigripal|tabcin pm|tela adhesiva|tempra|tempra infantil|termometro|tiras reactivas|tolnaftato|vendas|vick|vick vaporub|vitamina c|vitaminas\nBBE: aceite infantil|aceite para bebe|aceite para bebes|algodon hidrofilo|algodon para bebe|algodon para bebes|analgesico para bebe|antecesor|antialergico para bebe|antiinflamatorio para bebe|antipiretico para bebe|babero|bastoncillos para bebe|bastoncillos para bebes|biberon|biberon anticolico|biberon con tetina|biberon de plastico|biberon de vidrio|biberones|carne para bebe|cereal infantil|cereal para bebe|cereal para lactantes|cerelac|champu para bebe|champu para bebes|chupeta|chupetas|chupete|chupetes|chupon|chupon para bebe|chupones|chupones para bebe|comida infantil|comida para bebe|comida para lactantes|crema hidratante para bebe|crema humectante para bebe|crema para bebes|crema para irritacion|crema para panal|crema para panalitis|crema para rozaduras|curitas para bebe|curitas para bebes|formula|formula infantil|formula para bebe|formula para lactantes|formula para recien nacido|formula para recien nacidos|formulas|frasco|frasco de plastico|frasco de vidrio|frascos|fruta para bebe|gasa para bebe|gasa para bebes|gerber|glucosimetro para bebe|hisopos para bebe|hisopos para bebes|huggies|jabon de bano para bebes|jabon para bebe|jabon para bebes|jarabe para bebe|jarabe para bebes|jarabe para la tos para bebe|jarabe para la tos para bebes|juguete para bebe|leche de continuacion|leche de crecimiento|leche de transicion|leche en polvo infantil|leche en polvo para bebe|leche formula|leche materizada|leche materna|leche nido|leche para bebe|locion para bebe|locion para bebes|mamadera|mamadera con tetina|mamadera de plastico|mamadera de vidrio|mamaderas|mameluco|mamila|mamilas|medicamentos infantiles|medicamentos para bebe|nan|pampers|panal|panal desechable|panales|panales de entrenamiento|panales de tela|panales desechables|panales diurnos|panales nocturnos|panales para bebe|panales para bebe de nina|panales para bebe de nino|panales para bebes|panales para ninas|panales para ninos|panales para prematuros|panales para recien nacido|panales para recien nacidos|panales recien nacido|papilla|papilla de arroz|papilla de avena|papilla de cereal|papilla de fruta|papilla de maiz|papilla de verdura|papillas|pavo para bebe|pescado para bebe|pollo para bebe|pomada para irritacion|pomada para panalitis|pure|shampoo para bebe|shampoo para bebes|talco|talco para bebes|talco para panal|termometro de oido para bebe|termometro digital para bebe|termometro infrarrojo para bebe|termometro para bebe|termometro para bebes|termometro rectal para bebe|termometro temporal para bebe|tetina|tetinas|toallas para bebe|toallitas desechables|toallitas humedas|toallitas para bebe|toallitas para bebes|toallitas para cambio|toallitas para cambio de panal|toallitas para limpiar|vendas para bebe|vendas para bebes|verdura para bebe\nMAS: alimento de gato|alimento de perro|alimento gato|alimento humedo para gato|alimento humedo para mascotas|alimento humedo para perro|alimento para gato|alimento para mascotas|alimento para perro|alimento peces|alimento perro|alimento seco para gato|alimento seco para mascotas|alimento seco para perro|antiparasitario|antipulgas|arena aglomerante|arena de papel|arena de silice|arena gato|arena para gato|arena para gatos|arena sanitaria|bebedero para gato|bebedero para mascotas|bebedero para perro|cama para gato|cama para mascotas|cama para perro|carnaza|cat chow|cepillo para gato|cepillo para mascotas|cepillo para perro|chamarra para perro|collar|collar antipulgas|collar para gato|collar para mascotas|collar para perro|comida para gato|comida para perro|correa|correa para mascotas|correa para perro|croquetas|croquetas para gato|croquetas para gatos|croquetas para mascotas|croquetas para perro|croquetas para perros|desodorante para mascotas|desparasitante|desparasitante para gato|desparasitante para perro|dog chow|golosinas para gato|golosinas para mascotas|golosinas para perro|hueso|hueso de cuero|hueso de plastico|hueso para perro|huesos perro|jabon para gato|jabon para mascotas|jabon para perro|jaula para gato|jaula para mascotas|jaula para perro|juguete|juguete para gato|juguete para gatos|juguete para mascota|juguete para mascotas|juguete para perro|juguete para perros|juguetes perro|lata para gato|lata para mascotas|lata para perro|latas para gato|latas para mascotas|latas para perro|latitas de gato|panal para perro|panales para perro|pastilla antipulgas|pedigree|pipeta antipulgas|plato para gato|plato para mascotas|plato para perro|premios para gato|premios para perro|purina|ropa para mascotas|ropa para perro|shampoo para gato|shampoo para mascota|shampoo para mascotas|shampoo para perro|sobre gato|sobre perro|spray para mascotas|sueter para perro|suplementos para gato|suplementos para perro|toallitas para gato|toallitas para mascotas|toallitas para perro|transportadora para gato|transportadora para mascotas|vitaminas para gato|vitaminas para perro|whiskas\n";
+</script>
+<script>
+// ListoLista app (checkpoint 1). Uses ListoAisles (src/aisles.js), ListoMerge (src/merge.js),
+// ListoSync (src/sync.js). Built into index.html by tools/build.py.
+//
+// Principles (AGENTS.md): open straight into the list; few clear choices; optional features load
+// only when used; no accounts; the share link is the key; zero running cost.
+(function () {
+  'use strict';
+
+  // ---------- small helpers ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var now = function () { return Date.now(); };
+  function rid(n) {
+    var b = new Uint8Array(n || 8); crypto.getRandomValues(b);
+    return Array.from(b, function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+  }
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  var K = { index: 'll2_lists', last: 'll2_last', device: 'll2_device', hints: 'll2_hints', v1map: 'll2_v1map',
+            list: function (id) { return 'll2_list_' + id; } };
+  var DEVICE = store.get(K.device) || (function () { var d = rid(6); store.set(K.device, d); return d; })();
+  var isLocalDev = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  var RELAY = isLocalDev ? 'ws://127.0.0.1:8787' : (typeof LISTO_RELAY === 'string' ? LISTO_RELAY : '');
+
+  function emptyState(title) { return { meta: { title: title || 'LISTA', timestamp: 0 }, items: [], ovr: {} }; }
+  function hints() { return store.get(K.hints, {}); }
+  function setHint(k) { var h = hints(); h[k] = true; store.set(K.hints, h); }
+
+  // ---------- one-time migration from the first version (index.html before 2026-09-25) ----------
+  function migrateV1() {
+    if (store.get('ll2_migrated')) return;
+    var lists = store.get(K.index, {}), map = {};
+    [store.get('listolista_index_local', {}), store.get('listolista_index_shared', {})].forEach(function (idx, shared) {
+      Object.keys(idx || {}).forEach(function (oldId) {
+        var old = store.get('listolista_data_' + oldId);
+        if (!old || !Array.isArray(old.items)) return;
+        var id = 'l_' + rid(8);
+        var st = emptyState((old.meta && old.meta.title) || 'LISTA');
+        st.meta.timestamp = (old.meta && old.meta.timestamp) || 0;
+        st.items = old.items.map(function (i) {
+          var t = i.timestamp || i.ts || 0;
+          return { id: String(i.id), text: String(i.text || ''), done: !!i.done, deleted: !!i.deleted, timestamp: t, created: i.ts || t };
+        });
+        store.set(K.list(id), st);
+        lists[id] = { title: st.meta.title, lastVisited: (idx[oldId] && idx[oldId].lastVisited) || 0, wasShared: !!shared };
+        map[oldId] = id;
+      });
+    });
+    store.set(K.index, lists); store.set(K.v1map, map); store.set('ll2_migrated', true);
+  }
+
+  // ---------- the open list ----------
+  var cur = { id: null, secret: null, keys: null, relay: null, state: null, status: 'local' };
+  var view = { aisles: false, doneOpen: true };
+  var flashIds = {};
+
+  function listIndex() { return store.get(K.index, {}); }
+  function touchIndex(id, patch) {
+    var idx = listIndex();
+    idx[id] = Object.assign({}, idx[id] || {}, patch || {}, { lastVisited: now() });
+    store.set(K.index, idx);
+  }
+  function persist() {
+    store.set(K.list(cur.id), cur.state);
+    touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret || undefined });
+  }
+  function changed(ids) {
+    persist();
+    if (cur.relay) cur.relay.put(cur.state);
+    render(ids);
+  }
+
+  function closeCurrent() {
+    if (cur.relay) { cur.relay.close(); cur.relay = null; }
+    cur = { id: null, secret: null, keys: null, relay: null, state: null, status: 'local' };
+  }
+
+  function openLocal(id) {
+    closeCurrent();
+    cur.id = id;
+    cur.state = store.get(K.list(id)) || emptyState();
+    view.aisles = !!(listIndex()[id] || {}).aisles;
+    store.set(K.last, id);
+    history.replaceState(null, '', location.pathname + '#l=' + id);
+    persist(); setStatus('local'); render(); focusInput();
+  }
+
+  function openShared(secret) {
+    closeCurrent();
+    return ListoSync.derive(secret).then(function (keys) {
+      cur.id = keys.roomId; cur.secret = secret; cur.keys = keys;
+      cur.state = store.get(K.list(cur.id)) || emptyState();
+      view.aisles = !!(listIndex()[cur.id] || {}).aisles;
+      store.set(K.last, cur.id);
+      history.replaceState(null, '', location.pathname + '#k=' + secret);
+      persist(); render(); focusInput();
+      connect();
+    }).catch(function () { toast('Ese enlace no es válido.'); openLocal('l_' + rid(8)); });
+  }
+
+  function connect() {
+    if (!RELAY) { setStatus('offline'); return; }
+    setStatus('connecting');
+    cur.relay = new ListoSync.Relay(RELAY, cur.keys, {
+      onRemote: onRemote,
+      onStatus: setStatus,
+      onError: function (code) {
+        if (code === 'too_big') toast('La lista es demasiado grande para compartirla.');
+        else if (code === 'forbidden') toast('Este enlace ya no puede modificar la lista.');
+      },
+    });
+  }
+
+  function onRemote(remote) {
+    var before = {};
+    cur.state.items.forEach(function (i) { before[i.id] = i.timestamp || 0; });
+    var m = ListoMerge.merge(cur.state, remote);
+    cur.state = m.state;
+    if (!cur.state.ovr) cur.state.ovr = {};
+    if (m.changed) {
+      var ids = cur.state.items.filter(function (i) { return !(i.id in before) || (i.timestamp || 0) > before[i.id]; })
+        .map(function (i) { return i.id; });
+      store.set(K.list(cur.id), cur.state);
+      touchIndex(cur.id, { title: cur.state.meta.title, secret: cur.secret });
+      render(ids);
+    }
+    if (m.localNewer && cur.relay) cur.relay.put(cur.state);
+  }
+
+  function setStatus(s) {
+    cur.status = s;
+    var dot = $('dot');
+    dot.className = 'dot' + (s === 'online' ? ' on' : (s === 'local' ? '' : ' wait'));
+    clearTimeout(setStatus.t);
+    if (s === 'offline' || s === 'connecting') setStatus.t = setTimeout(function () {
+      if (cur.status !== 'online' && cur.secret) $('offline').classList.add('show');
+    }, 4000);
+    else $('offline').classList.remove('show');
+    setTimeout(layout, 0); setTimeout(layout, 4100);
+  }
+
+  // ---------- items ----------
+  // "huevos, leche y pan" -> three items; "pan y mantequilla" stays one (no comma, no split).
+  function splitItems(text) {
+    var parts = text.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (parts.length > 1) {
+      var last = parts.pop().split(/\s+y\s+/i).map(function (s) { return s.trim(); }).filter(Boolean);
+      parts = parts.concat(last);
+    }
+    return parts;
+  }
+  function addFrom(input) {
+    var text = input.value.trim();
+    if (!text) return;
+    var t = now(), ids = [];
+    splitItems(text).forEach(function (s, k) {
+      var it = { id: rid(8), text: s, done: false, deleted: false, timestamp: t + k, created: t + k, by: DEVICE };
+      cur.state.items.push(it); ids.push(it.id);
+    });
+    input.value = '';
+    changed(ids);
+    input.focus();
+  }
+  function find(id) { return cur.state.items.find(function (i) { return i.id === id; }); }
+  function toggle(id) {
+    var it = find(id); if (!it) return;
+    it.done = !it.done; it.timestamp = now();
+    changed([id]);
+  }
+  function remove(id) {
+    var it = find(id); if (!it) return;
+    it.deleted = true; it.timestamp = now();
+    changed([]);
+    undo('Borrado: ' + it.text, function () { it.deleted = false; it.timestamp = now(); changed([id]); });
+  }
+  function editText(id, text) {
+    var it = find(id); if (!it || !text.trim() || text.trim() === it.text) return;
+    it.text = text.trim(); it.timestamp = now();
+    changed([id]);
+  }
+  function clearDone() {
+    var gone = cur.state.items.filter(function (i) { return i.done && !i.deleted; });
+    if (!gone.length) return;
+    var t = now();
+    gone.forEach(function (i) { i.deleted = true; i.timestamp = t; });
+    changed([]);
+    undo(gone.length + (gone.length === 1 ? ' tachado borrado' : ' tachados borrados'), function () {
+      var t2 = now(); gone.forEach(function (i) { i.deleted = false; i.timestamp = t2; }); changed([]);
+    });
+  }
+  function emptyList() {
+    var gone = cur.state.items.filter(function (i) { return !i.deleted; });
+    if (!gone.length) return;
+    var t = now();
+    gone.forEach(function (i) { i.deleted = true; i.timestamp = t; });
+    changed([]);
+    undo('Lista vaciada', function () { var t2 = now(); gone.forEach(function (i) { i.deleted = false; i.timestamp = t2; }); changed([]); });
+  }
+
+  // ---------- aisles (loaded on first use: pay for what you use) ----------
+  var aisleIndex = null;
+  function aisles() {
+    if (!aisleIndex) {
+      var dict = {};
+      String(LISTO_DICT_TEXT || '').split('\n').forEach(function (line) {
+        line = line.trim(); if (!line || line[0] === '#') return;
+        var c = line.indexOf(':');
+        dict[line.slice(0, c).trim()] = line.slice(c + 1).split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+      });
+      aisleIndex = ListoAisles.buildIndex(dict);
+    }
+    return aisleIndex;
+  }
+  function overrides() {
+    var o = {}, src = cur.state.ovr || {};
+    Object.keys(src).forEach(function (k) { if (src[k] && src[k].aisle) o[k] = src[k].aisle; });
+    return o;
+  }
+  function aisleOrder() {
+    var ids = (cur.state.order && cur.state.order.ids) || [];
+    var all = ListoAisles.AISLES.map(function (a) { return a.id; });
+    var out = ids.filter(function (id) { return all.indexOf(id) >= 0; });
+    all.forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); });
+    return out;
+  }
+  function aisleName(id) {
+    var a = ListoAisles.AISLES.find(function (x) { return x.id === id; });
+    return a ? a.name : id;
+  }
+  function itemKey(text) { return ListoAisles.stripQuantity(ListoAisles.fold(text)); }
+  function setAisle(it, aisleId) {
+    cur.state.ovr = cur.state.ovr || {};
+    cur.state.ovr[itemKey(it.text)] = { aisle: aisleId, ts: now() };
+    changed([it.id]);
+  }
+  function moveAisle(id, dir) {
+    var order = aisleOrder(), i = order.indexOf(id), j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    order[i] = order[j]; order[j] = id;
+    cur.state.order = { ids: order, ts: now() };
+    changed([]);
+  }
+
+  // ---------- rendering ----------
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function render(ids) {
+    (ids || []).forEach(function (id) { flashIds[id] = true; });
+    var title = $('title');
+    if (document.activeElement !== title) title.textContent = cur.state.meta.title || 'LISTA';
+    document.title = (cur.state.meta.title || 'LISTA') + ' · ListoLista';
+
+    var live = cur.state.items.filter(function (i) { return !i.deleted; });
+    var pending = live.filter(function (i) { return !i.done; })
+      .sort(function (a, b) { return (a.created || a.timestamp || 0) - (b.created || b.timestamp || 0); });
+    var done = live.filter(function (i) { return i.done; }).sort(function (a, b) { return b.timestamp - a.timestamp; });
+
+    var pBox = $('pending'); pBox.textContent = '';
+    if (view.aisles) {
+      var idx = aisles(), ov = overrides(), groups = {};
+      pending.forEach(function (it) {
+        var r = ListoAisles.aisleOf(it.text, idx, ov);
+        (groups[r.id] = groups[r.id] || []).push({ it: it, r: r });
+      });
+      aisleOrder().forEach(function (aid) {
+        if (!groups[aid]) return;
+        pBox.appendChild(el('div', 'group', aisleName(aid)));
+        groups[aid].forEach(function (g) { pBox.appendChild(row(g.it, g.r)); });
+      });
+    } else {
+      pending.forEach(function (it) { pBox.appendChild(row(it, null)); });
+    }
+
+    var dBox = $('donebox'); dBox.textContent = '';
+    if (done.length) {
+      var head = el('div', 'done-head');
+      var tog = el('button', '', (view.doneOpen ? '▾ ' : '▸ ') + 'Tachados (' + done.length + ')');
+      tog.onclick = function () { view.doneOpen = !view.doneOpen; render(); };
+      var clr = el('button', '', 'Limpiar');
+      clr.onclick = clearDone;
+      head.append(tog, clr); dBox.appendChild(head);
+      if (view.doneOpen) done.forEach(function (it) { dBox.appendChild(row(it, null)); });
+    }
+    flashIds = {};
+  }
+
+  function row(it, aisle) {
+    var r = el('div', 'row' + (it.done ? ' done' : '') + (flashIds[it.id] ? ' flash' : ''));
+    r.setAttribute('role', 'checkbox'); r.setAttribute('aria-checked', it.done ? 'true' : 'false'); r.tabIndex = 0;
+    r.appendChild(el('span', 'txt', it.text));
+    if (aisle) {
+      var tag = el('button', 'tag' + (aisle.guess ? ' guess' : ''), aisleName(aisle.id) + (aisle.guess ? '?' : ''));
+      tag.setAttribute('aria-label', 'Cambiar pasillo de ' + it.text);
+      tag.onclick = function (e) { e.stopPropagation(); aislePicker(it, aisle.id); };
+      r.appendChild(tag);
+    }
+    // tap = strike / unstrike; long-press = edit / delete
+    var timer = null, long = false;
+    r.addEventListener('pointerdown', function () { long = false; timer = setTimeout(function () { long = true; itemSheet(it); }, 550); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { r.addEventListener(ev, function () { clearTimeout(timer); }); });
+    r.addEventListener('contextmenu', function (e) { e.preventDefault(); if (!long) { long = true; itemSheet(it); } });
+    r.addEventListener('click', function () { if (long) { long = false; return; } toggle(it.id); maybeLongPressHint(); });
+    r.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(it.id); }
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(it.id); }
+    });
+    return r;
+  }
+
+  // ---------- sheets (menu, lists, item actions, aisle picker, aisle order) ----------
+  function sheet(build) {
+    var bg = el('div', 'sheet-bg'), s = el('div', 'sheet');
+    s.setAttribute('role', 'dialog');
+    bg.appendChild(s);
+    var close = function () { bg.remove(); document.removeEventListener('keydown', esc); };
+    var esc = function (e) { if (e.key === 'Escape') close(); };
+    bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
+    document.addEventListener('keydown', esc);
+    build(s, close);
+    document.body.appendChild(bg);
+    var first = s.querySelector('input, button'); if (first && first.tagName === 'INPUT') first.focus();
+    return close;
+  }
+  function opt(label, onClick, extra) {
+    var b = el('button', 'opt' + (extra && extra.warn ? ' warn' : ''));
+    b.appendChild(el('span', '', label));
+    if (extra && extra.small) b.appendChild(el('small', '', extra.small));
+    if (extra && extra.sw != null) b.appendChild(el('span', 'switch' + (extra.sw ? ' on' : '')));
+    b.onclick = onClick;
+    return b;
+  }
+
+  function menu() {
+    sheet(function (s, close) {
+      s.appendChild(opt('Ordenar por pasillo', function () {
+        view.aisles = !view.aisles; touchIndex(cur.id, { aisles: view.aisles }); close(); render();
+      }, { sw: view.aisles }));
+      s.appendChild(opt('Orden de los pasillos', function () { close(); orderSheet(); }, { small: 'como tu súper' }));
+      s.appendChild(opt('Borrar tachados', function () { close(); clearDone(); }));
+      s.appendChild(opt('Mis listas', function () { close(); listsSheet(); }));
+      s.appendChild(opt('Nueva lista', function () { close(); openLocal('l_' + rid(8)); }));
+      if (installPrompt) s.appendChild(opt('Instalar como app', function () { close(); installPrompt.prompt(); installPrompt = null; }));
+      else if (isIOS() && !isStandalone()) s.appendChild(opt('Usar como app', function () { close(); showInstallHint(true); }));
+      s.appendChild(opt('Vaciar la lista', function () { close(); emptyList(); }, { warn: true }));
+    });
+  }
+
+  function listsSheet() {
+    sheet(function (s, close) {
+      s.appendChild(el('h2', '', 'Mis listas'));
+      var idx = listIndex();
+      Object.keys(idx).sort(function (a, b) { return (idx[b].lastVisited || 0) - (idx[a].lastVisited || 0); }).forEach(function (id) {
+        var e = idx[id];
+        var b = opt((id === cur.id ? '• ' : '') + (e.title || 'LISTA'), function () {
+          close(); if (e.secret) openShared(e.secret); else openLocal(id);
+        }, { small: e.secret ? 'compartida' : (e.wasShared ? 'antes compartida' : 'solo aquí') });
+        s.appendChild(b);
+      });
+      s.appendChild(opt('+ Nueva lista', function () { close(); openLocal('l_' + rid(8)); }));
+      s.appendChild(el('h2', '', 'Abrir un enlace compartido'));
+      var p = el('div', 'paste'), inp = el('input'), go = el('button', '', 'Abrir');
+      inp.placeholder = 'Pega aquí el enlace'; inp.setAttribute('aria-label', 'Enlace compartido');
+      go.onclick = function () {
+        var m = /#k=([A-Za-z0-9_-]{22})/.exec(inp.value) || /^([A-Za-z0-9_-]{22})$/.exec(inp.value.trim());
+        if (!m) { toast('No encuentro una lista en ese enlace.'); return; }
+        close(); openShared(m[1]);
+      };
+      p.append(inp, go); s.appendChild(p);
+    });
+  }
+
+  function itemSheet(it) {
+    sheet(function (s, close) {
+      s.appendChild(el('h2', '', it.text));
+      var box = el('div', 'edit-box'), inp = el('input');
+      inp.value = it.text; inp.setAttribute('aria-label', 'Editar artículo');
+      inp.onkeydown = function (e) { if (e.key === 'Enter') { editText(it.id, inp.value); close(); } };
+      box.appendChild(inp); s.appendChild(box);
+      s.appendChild(opt('Guardar cambio', function () { editText(it.id, inp.value); close(); }));
+      s.appendChild(opt('Cambiar pasillo', function () {
+        close(); aislePicker(it, ListoAisles.aisleOf(it.text, aisles(), overrides()).id);
+      }));
+      s.appendChild(opt('Borrar', function () { close(); remove(it.id); }, { warn: true }));
+    });
+  }
+
+  function aislePicker(it, currentId) {
+    sheet(function (s, close) {
+      s.appendChild(el('h2', '', '¿En qué pasillo está «' + it.text + '»?'));
+      var grid = el('div', 'aisle-grid');
+      aisleOrder().forEach(function (id) {
+        var b = el('button', id === currentId ? 'cur' : '', aisleName(id));
+        b.onclick = function () { close(); setAisle(it, id); toast('Recordado para esta lista.'); };
+        grid.appendChild(b);
+      });
+      s.appendChild(grid);
+    });
+  }
+
+  function orderSheet() {
+    sheet(function (s) {
+      s.appendChild(el('h2', '', 'Orden de los pasillos (como recorres tu súper)'));
+      var list = el('div');
+      var draw = function () {
+        list.textContent = '';
+        aisleOrder().forEach(function (id, i, all) {
+          var r = el('div', 'order-row');
+          r.appendChild(el('span', '', aisleName(id)));
+          var up = el('button', '', '↑'), dn = el('button', '', '↓');
+          up.setAttribute('aria-label', 'Subir ' + aisleName(id)); dn.setAttribute('aria-label', 'Bajar ' + aisleName(id));
+          up.disabled = i === 0; dn.disabled = i === all.length - 1;
+          up.onclick = function () { moveAisle(id, -1); draw(); };
+          dn.onclick = function () { moveAisle(id, 1); draw(); };
+          r.append(up, dn); list.appendChild(r);
+        });
+      };
+      draw(); s.appendChild(list);
+    });
+  }
+
+  // ---------- sharing ----------
+  function share() {
+    if (cur.secret) return offerLink();
+    // Turn this list into a shared one: new secret, same items, now end-to-end encrypted.
+    var secret = ListoSync.newSecret(), st = cur.state, oldId = cur.id;
+    ListoSync.derive(secret).then(function (keys) {
+      store.set(K.list(keys.roomId), st);
+      var idx = listIndex(); delete idx[oldId]; store.set(K.index, idx); store.del(K.list(oldId));   // moved, not copied
+      return openShared(secret);
+    }).then(offerLink);
+  }
+  function offerLink() {
+    var url = location.origin + location.pathname + '#k=' + cur.secret;
+    var title = cur.state.meta.title || 'Lista';
+    if (navigator.share) {
+      navigator.share({ title: title, text: 'Nuestra lista: ' + title, url: url }).catch(function () {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(function () { toast('Enlace copiado. Quien lo tenga puede ver y editar la lista.'); },
+        function () { prompt('Copia este enlace:', url); });
+    } else { prompt('Copia este enlace:', url); }
+    if (isIOS() && !isStandalone()) setTimeout(function () { showInstallHint(false); }, 1500);
+  }
+
+  // ---------- small UI pieces ----------
+  var snackTimer = null, snackUndo = null;
+  function undo(text, fn) {
+    $('snack-text').textContent = text;
+    snackUndo = fn;
+    $('snack-undo').style.display = '';
+    $('snack').classList.add('show');
+    clearTimeout(snackTimer);
+    snackTimer = setTimeout(function () { $('snack').classList.remove('show'); snackUndo = null; }, 8000);
+  }
+  function toast(text) {
+    $('snack-text').textContent = text;
+    snackUndo = null; $('snack-undo').style.display = 'none';
+    $('snack').classList.add('show');
+    clearTimeout(snackTimer);
+    snackTimer = setTimeout(function () { $('snack').classList.remove('show'); }, 3500);
+  }
+  function maybeLongPressHint() {
+    if (hints().longpress) return;
+    setHint('longpress');
+    setTimeout(function () { toast('Consejo: mantén presionado un artículo para editarlo o borrarlo.'); }, 600);
+  }
+  var isIOS = function () { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); };
+  var isStandalone = function () { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; };
+  function showInstallHint(force) {
+    if (!force && hints().install) return;
+    var h = $('hint');
+    h.textContent = '';
+    h.appendChild(el('div', '', 'Para tenerla como app en tu iPhone: toca Compartir (el cuadro con la flecha) y luego «Agregar a inicio». Hazlo desde esta lista para que el ícono la abra.'));
+    var ok = el('button', '', 'Entendido');
+    ok.onclick = function () { setHint('install'); h.classList.remove('show'); };
+    h.appendChild(ok); h.classList.add('show');
+  }
+  var installPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installPrompt = e; });
+
+  function focusInput() { var i = $('i1'); try { i.focus({ preventScroll: true }); } catch (e) { i.focus(); } }
+  function layout() {
+    var h = document.querySelector('header').getBoundingClientRect().height;
+    $('main').style.top = h + 'px';
+  }
+
+  // ---------- wiring ----------
+  function bind() {
+    ['i1', 'i2'].forEach(function (id) {
+      var inp = $(id);
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addFrom(inp); } });
+      inp.addEventListener('blur', function () { if (inp.value.trim()) addFrom(inp); });
+    });
+    var title = $('title'), titleTimer = null;
+    title.addEventListener('input', function () {
+      cur.state.meta = Object.assign({}, cur.state.meta, { title: title.textContent.trim() || 'LISTA', timestamp: now() });
+      clearTimeout(titleTimer);
+      titleTimer = setTimeout(function () { changed([]); }, 400);
+    });
+    title.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); title.blur(); focusInput(); } });
+    $('btn-share').onclick = share;
+    $('btn-menu').onclick = menu;
+    $('btn-lists').onclick = listsSheet;
+    $('snack-undo').onclick = function () { var f = snackUndo; snackUndo = null; $('snack').classList.remove('show'); if (f) f(); };
+    // The empty area below the list is one big "tap to write" target (iPhone needs one tap for the keyboard).
+    $('write-zone').addEventListener('click', focusInput);
+    $('main').addEventListener('click', function (e) { if (e.target === $('main')) focusInput(); });
+    window.addEventListener('hashchange', function () { start(); });
+    // After the phone sleeps, always open a fresh connection (sockets die silently in the background).
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && cur.relay) cur.relay.reconnectNow();
+    });
+    window.addEventListener('pagehide', function () { if (cur.id) store.set(K.list(cur.id), cur.state); });
+    window.addEventListener('resize', layout);
+  }
+
+  function start() {
+    var h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    var q = new URLSearchParams(location.search);
+    var k = h.get('k'), l = h.get('l');
+    if (k && k === cur.secret) return;
+    if (l && l === cur.id) return;
+    if (k) return openShared(k);
+    var old = q.get('room') || q.get('local'), v1 = store.get(K.v1map, {});
+    if (old && v1[old]) { history.replaceState(null, '', location.pathname); return openLocal(v1[old]); }
+    if (l && store.get(K.list(l))) return openLocal(l);
+    var last = store.get(K.last), e = last && listIndex()[last];
+    if (e) return e.secret ? openShared(e.secret) : openLocal(last);
+    openLocal('l_' + rid(8));
+  }
+
+  migrateV1();
+  bind();
+  layout();
+  start();
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+})();
+
+</script>
 </body>
 </html>

@@ -37,6 +37,7 @@ ok('blob moved to another room rejected', await throws(() => S.open({ ...k1, roo
 if (process.env.RELAY) {
   // A tiny per-item "newest wins" merge, standing in for src/merge.js in this test.
   function merge(local, remote) {
+    remote = remote || { items: [] };
     const map = new Map(local.items.map(i => [i.id, i]));
     let changed = false, localNewer = false;
     for (const r of remote.items || []) { const l = map.get(r.id); if (!l || r.timestamp > l.timestamp) { map.set(r.id, r); changed = true; } }

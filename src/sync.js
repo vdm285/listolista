@@ -70,7 +70,8 @@ var ListoSync = (function () {
   }
 
   // Phone side of the relay. handlers: onRemote(state) -> called with every decrypted copy from
-  // the relay (the app merges it and calls put() again if it holds newer changes);
+  // the relay, or with null when the relay holds nothing yet (the app merges it and calls put()
+  // again if it holds newer changes);
   // onStatus('connecting'|'online'|'offline'); onError(code).
   function Relay(baseUrl, keys, handlers) {
     var self = this;
@@ -95,7 +96,7 @@ var ListoSync = (function () {
             open(keys, m.blob).then(function (st) { handlers.onRemote(st); }, function () {
               if (handlers.onError) handlers.onError('decrypt');
             }).then(done);
-          } else done();
+          } else { handlers.onRemote(null); done(); }   // nothing stored yet: the app may upload
         } else if (m.t === 'err') {
           sending = false;
           if (handlers.onError) handlers.onError(m.code);
