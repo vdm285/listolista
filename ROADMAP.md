@@ -8,9 +8,9 @@ Legend: ✅ done · 🔨 in progress · ⏳ waiting on Victor · 🔜 next · �
 ---
 
 ## Where we are, in one line
-**Checkpoint 1 is built and tested on the Mac (branch `design/checkpoint-1`, not live). Next: put the
-relay and a private preview online (needs Victor's `wrangler login`), then a 20-minute two-phone
-test with Victor's wife, then go live.**
+**Checkpoint 1 is online as a private preview: https://listolista-preview.vdm285.workers.dev
+(relay: listolista-relay.vdm285.workers.dev). Next: the two-phone test (Victor + wife), fixes, then
+go live on vdm285.github.io/listolista.**
 
 ---
 
@@ -47,10 +47,10 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 - ✅ README.md and AGENTS.md updated; one-command deploy script (`tools/deploy.sh`).
 
 ## Checkpoint 1: what is left, in order
-1. ⏳ **Victor: `wrangler login`** (Cloudflare account created 2026-09-25, linked to GitHub).
-2. 🔜 Deploy the relay (`tools/deploy.sh relay`), rebuild with its address, deploy the private preview
-   (`tools/deploy.sh preview` → `https://listolista-preview.pages.dev`).
-3. 🔨 Fix what the independent code review confirms (running now).
+1. ✅ Cloudflare: account (linked to GitHub), `wrangler login`, workers.dev name `vdm285`.
+2. ✅ Relay and private preview online (`tools/deploy.sh relay|preview`); live sync tests 21/21.
+3. ✅ Independent code review (4 dimensions, 50 agents): 44 confirmed findings; the important ones
+   fixed (see commit b058d88); the rest listed in the backlog.
 4. ⏳ **Two-phone test, ~20 minutes** (Victor's Android + wife's iPhone), on the preview:
    open the link, add/strike/undo, aisle view, Add to Home Screen from the link, airplane mode then
    back, lock and unlock the phone. Checklist in section "Phone test" below.
@@ -61,7 +61,6 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 ## Decisions waiting on Victor (priority order)
 | # | Decision | Why it matters | Default if no answer |
 |---|---|---|---|
-| 1 | `wrangler login` | Nothing can go online without it | — |
 | 2 | **Papel or Renglones** (try the mock-ups) | The main writing experience | Renglones (today's layout) |
 | 3 | Your store(s) and their aisle walking order | Aisle view order | Produce first, then bread, meat, dairy, frozen… |
 | 4 | 51 disputed dictionary words (`data/aisles-review.md`) | e.g. coffee: Despensa or Bebidas? | The old dictionary's choice |
@@ -91,6 +90,10 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 - [ ] Anything confusing, slow or annoying → note it here.
 
 ## After checkpoint 1 (backlog, not ordered)
+- 💤 Review leftovers (low severity): relay rate limits per IP/room creation; screen-reader focus kept
+  across re-renders; dictionary as a lazily loaded file (pay-for-what-you-use); remove empty "LISTA"
+  entries from Mis listas; move the app off the shared vdm285.github.io origin (secrets in
+  localStorage are shared with Victor's other pages there) → strongly consider the own address.
 - 💤 "Papel" mode (if chosen) or as an optional view.
 - 💤 Grow the aisle dictionary with the local model (label hundreds of candidate words; family reviews
   disagreements) → raise the test floor.
@@ -100,5 +103,6 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 - 💤 Friends-and-family feedback form (no accounts).
 
 ## Log (newest first)
+- 2026-09-25 evening: relay deployed (Victor), review fixes, preview online, ready for the phone test.
 - 2026-09-25: research ×4, mock-ups, safety patch live, building blocks + tests, dictionary as data,
   checkpoint-1 app built and tested locally, README/AGENTS updated. Cloudflare account created.
