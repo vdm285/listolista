@@ -90,6 +90,12 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 - [ ] Anything confusing, slow or annoying → note it here.
 
 ## After checkpoint 1 (backlog, not ordered)
+- 💤 From social run 2 (2026-09-25, ~/local-ai/docs/intel/2026-09-25-run2-shopping-lists-and-arduino.md):
+  see the list without unlocking (widget / lock-screen view); aisle order that learns from the order
+  items get checked off per store; one summary notification instead of a ping per item; paste a
+  recipe or free text → items; a Siri Shortcut / URL link so voice and AI assistants can add items;
+  keep sharing free (if ever paid: one-time unlock); lead with privacy; check the name in other
+  languages before launch. Victor's own phone-test feedback comes first.
 - 💤 Review leftovers (low severity): relay rate limits per IP/room creation; screen-reader focus kept
   across re-renders; dictionary as a lazily loaded file (pay-for-what-you-use); remove empty "LISTA"
   entries from Mis listas; move the app off the shared vdm285.github.io origin (secrets in
