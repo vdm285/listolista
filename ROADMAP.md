@@ -55,6 +55,14 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
    open the link, add/strike/undo, aisle view, Add to Home Screen from the link, airplane mode then
    back, lock and unlock the phone. Checklist in section "Phone test" below.
 5. 🔜 Fix what the phone test finds.
+   - 🐞 **Found by the HQ session's probes (2026-09-26), fix first:** after a number, the optional
+     "de" in `src/aisles.js` (lines 90-91, `(?:\\s+de)?`) has no word boundary, so it eats the start of
+     the next word: "2 detergentes" → key "tergentes" → Otros; "2 detergente en polvo" → Carnes (guess
+     "pollo"); "3 desinfectante de cocina" → Carnes ("cecina"). Fix: `(?:\\s+de\\b)?` in both regexes, plus
+     tests. Also low impact: "jugo v8" → key "jugo v" (no boundary before a trailing number); `buildIndex`
+     would crash on a dictionary term "constructor" (`index.singles = {}` → `Object.create(null)`).
+     Probe set: ~/local-ai/evals/probes/listolista-matcher-probes.js (production 16/20; the other 2 fails are
+     unreachable in the app).
 6. ⏳ **Go live:** merge `design/checkpoint-1` into `main` (GitHub Pages). Then erase the old
    plaintext copies on the public MQTT server (`tools/erase-broker-lists.sh --erase`, Victor runs it).
 
