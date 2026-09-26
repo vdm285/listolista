@@ -55,14 +55,23 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
    open the link, add/strike/undo, aisle view, Add to Home Screen from the link, airplane mode then
    back, lock and unlock the phone. Checklist in section "Phone test" below.
 5. 🔜 Fix what the phone test finds.
-   - 🐞 **Found by the HQ session's probes (2026-09-26), fix first:** after a number, the optional
-     "de" in `src/aisles.js` (lines 90-91, `(?:\\s+de)?`) has no word boundary, so it eats the start of
-     the next word: "2 detergentes" → key "tergentes" → Otros; "2 detergente en polvo" → Carnes (guess
-     "pollo"); "3 desinfectante de cocina" → Carnes ("cecina"). Fix: `(?:\\s+de\\b)?` in both regexes, plus
-     tests. Also low impact: "jugo v8" → key "jugo v" (no boundary before a trailing number); `buildIndex`
-     would crash on a dictionary term "constructor" (`index.singles = {}` → `Object.create(null)`).
-     Probe set: ~/local-ai/evals/probes/listolista-matcher-probes.js (production 16/20; the other 2 fails are
-     unreachable in the app).
+   - 🐞 **Found by the HQ session's probes and property checker (2026-09-26), fix first** (`src/aisles.js`):
+     1. After a number, the optional "de" eats the start of the next word: "2 detergentes" → Otros,
+        "2 detergente en polvo" → Carnes ("pollo"), "3 desinfectante de cocina" → Carnes ("cecina").
+     2. A trailing number of 2+ characters is only partly removed ("coca cola 600 ml" → key "coca cola 60"),
+        and "v8"/"n95" lose their digits. The aisle usually stays right, but a saved aisle correction is ignored.
+     3. `buildIndex` would crash on a dictionary term "constructor" (plain `{}`).
+     Tested fix (3 lines; 68/68 tests, 19/20 probes, 31/31 properties on 6 seeds; add tests for each case):
+     ```
+     line 90:  (?:\\s+de)?   →  (?:\\s+de\\b)?        (same on line 91)
+     line 93:  '^(.*)\\s*(?:('  →  '^(.*?)\\s+(?:('
+     line 143: singles: {}   →  singles: Object.create(null)
+     ```
+     Spec gaps to decide (Victor): (a) ties between aisles are decided by dictionary order, so 8 of 10 tied
+     words land away from the aisle that lists them ("papas" → Frutas, "condones" → Higiene); proposed rule:
+     an exact term beats a singular-form match. (b) A quantity at both ends: remove both?
+     Checkers: ~/local-ai/evals/probes/ and ~/local-ai/evals/properties/ (details in
+     ~/local-ai/docs/research/2026-09-26-zero-cost-checks-A-B.md).
 6. ⏳ **Go live:** merge `design/checkpoint-1` into `main` (GitHub Pages). Then erase the old
    plaintext copies on the public MQTT server (`tools/erase-broker-lists.sh --erase`, Victor runs it).
 
