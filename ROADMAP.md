@@ -96,6 +96,9 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
   recipe or free text → items; a Siri Shortcut / URL link so voice and AI assistants can add items;
   keep sharing free (if ever paid: one-time unlock); lead with privacy; check the name in other
   languages before launch. Victor's own phone-test feedback comes first.
+- 💤 From the HQ session (2026-09-26): `src/merge.js` loses an `ovr` entry whose key is literally
+  `"__proto__"` (found by the new probe set in ~/local-ai/evals/probes/). Harmless today, because
+  `sanitize()` rejects `_` in ovr keys; one-line hardening: build `resultOvr` with `Object.create(null)`.
 - 💤 Review leftovers (low severity): relay rate limits per IP/room creation; screen-reader focus kept
   across re-renders; dictionary as a lazily loaded file (pay-for-what-you-use); remove empty "LISTA"
   entries from Mis listas; move the app off the shared vdm285.github.io origin (secrets in
