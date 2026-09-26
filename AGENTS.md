@@ -11,6 +11,17 @@ to test it on your phone" steps, then ask go/no-go. Nothing is merged to `main` 
 live site) or pushed to GitHub without his OK. Project stage: personal learning, portfolio and
 open source; not commercial.
 
+## Working with Victor (copied from the workstation project, 2026-09-25)
+- Interview and align before heavy building; build in checkpoints; at each milestone show a
+  3-line status, a live preview and "how to test on your phone", then ask go/no-go.
+- Explain in plain language; when his hands are needed (logins, terminal, phones) give numbered steps.
+- When the ideal is impossible (e.g. iPhone's one-tap keyboard), do the next best thing and flag it.
+- If something carries a real risk, explain it in 2-3 sentences and let him decide; no
+  self-restricting rules or licence caveats (learning/portfolio stage).
+- Test local AI juniors on natural chores (manual: ~/local-ai/docs/manuals/js-logic.md; log in
+  ~/local-ai/benchmarks/junior-field-log.md).
+- Nothing is pushed to GitHub or merged to `main` (the live site) without his OK.
+
 ## Mission
 A **"quantum-linked piece of paper"** for shopping lists. Victor writes "huevos, leche" at home;
 it appears on his wife's phone at the supermarket; she taps an item and it is struck through on
