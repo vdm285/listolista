@@ -195,7 +195,7 @@ Other dated voices (Hacker News): a year of arguments over grocery items that ne
 
 ### 6.13 Testing method ✅
 - **Prototypes:** with static screens, users gave "less specific feedback"; interactive prototypes surfaced specific problems ([Megan Chan, NN/g, 2026-09-11](https://www.nngroup.com/articles/test-earlier-with-ai/)).
-- **Dogfooding:** "you cannot reliably simulate not knowing" ([Therese Fessenden, NN/g, 2026-08-07](https://www.nngroup.com/articles/dogfooding/)). The household test is dogfooding. It is useful, but it is not user research.
+- **Dogfooding:** "you cannot reliably simulate not knowing" ([Therese Fessenden, NN/g, 2026-08-07](https://www.nngroup.com/articles/dogfooding/)). The checkpoint-1 phone test is dogfooding. It is useful, but it is not user research.
 
 ---
 

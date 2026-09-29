@@ -11,7 +11,7 @@
 
 - **Today's wrong aisles come mostly from how the matcher is built, not from missing words.** Running the app's own code confirms it: short words fire inside longer ones ("te" in *tenis* and *sartén*, "res" in *flores*, "pino" in *champiñones*, "gel" in *verduras congeladas*).
 - **The dictionary has hidden defects.** 75 of its 1,659 words can never match, because they keep accents or ñ while typed text has them removed. 50 words are listed twice with different aisles, and the second entry silently wins. Aisles are shown alphabetically, not in walking order. The aisle is frozen when an item is added, so dictionary fixes never reach old items.
-- **A better matcher using the same words helps a lot and costs almost nothing.** On 40 deliberately tricky items it gets 26 right instead of 19, and it cuts confidently wrong answers from 15 to 5. The remaining misses are missing words, the missing "Congelados" aisle, or family choices (for example *pan molido*).
+- **A better matcher using the same words helps a lot and costs almost nothing.** On 40 deliberately tricky items it gets 26 right instead of 19, and it cuts confidently wrong answers from 15 to 5. The remaining misses are missing words, the missing "Congelados" aisle, or per-user choices (for example *pan molido*).
 - **The local Qwen3.6-35B is a good labeler for building the dictionary on the Mac.** Re-run today it scored 37/40 in 27 seconds, and 36/40 with a neutral prompt. It should grow the word list on the Mac; the phone gets only the list.
 - **AI running inside the phone is not worth it for checkpoint 1.** The smallest suitable model is a 108-124 MB download, plus a 3-5.5 MB runtime, plus a tokenizer of up to 17 MB. The whole dictionary is about 8 KB compressed today, and about 20-25 KB if it triples. Chrome's free built-in AI model does not run on phones (Google docs, 2026-08-26).
 - **Copy what the good list apps do.** Remember a correction for everyone on the shared list (AnyList). Let people put the aisles in their own store's order (AnyList, OurGroceries, Bring!). Keep the aisle view optional; Apple Reminders users complain when sections are forced on them.
@@ -189,7 +189,7 @@ A hand-written Damerau-Levenshtein function is about 20 lines, so no library is 
 8. Also: sort the dictionary keys once, not on every add.
 
 ### B. Aisles
-14 aisles with stable IDs, in a default walking order that the family can edit:
+14 aisles with stable IDs, in a default walking order that users can edit:
 FRU Frutas y verduras 🥦 · PAN Panadería y tortillería 🍞 · CAR Carnes y salchichonería 🥩 · LAC Lácteos y huevo 🧀 · CON Congelados 🧊 (new) · DES Despensa 🥫 · BOT Botanas y dulces 🍫 · BEB Bebidas y licores 🥤 · LIM Limpieza y hogar 🧹 · HIG Higiene personal 🧴 · FAR Farmacia 💊 · BBE Bebés 🍼 · MAS Mascotas 🐶 · OTR Otros 🛒.
 The produce-first order rests on general (US-based) store-layout sources (Chowhound, 2024-02-04). No Mexican evidence was found, so **confirm the order against the store you actually use.**
 
@@ -217,10 +217,10 @@ The produce-first order rests on general (US-based) store-layout sources (Chowho
 1. Resolve the 50 conflicting duplicates.
 2. Gather candidate words: PROFECO product and brand names (CC BY 4.0, with attribution), plus Qwen brainstorms per aisle (colloquial names, brands, diminutives).
 3. Label them with local Qwen3.6-35B: thinking off, temperature 0, output forced to the aisle IDs (llama-server's `response_format` json_schema works; verified locally), 40-100 items per batch.
-4. Cross-check with a second, shuffled pass. Send disagreements and Spain-isms (*patata*, *zumo*, *nata*) to a review file for the household to check.
+4. Cross-check with a second, shuffled pass. Send disagreements and Spain-isms (*patata*, *zumo*, *nata*) to a review file for the first two testers to check.
 
 ### G. Tests
-- Save the 40 tricky items as `tests/aisles-es-MX.tsv` (item, expected ID, store-dependent flag). Add a second set from real family lists.
+- Save the 40 tricky items as `tests/aisles-es-MX.tsv` (item, expected ID, store-dependent flag). Add a second set from real shopping lists.
 - Run the exact JS matcher headless with macOS's built-in `jsc`. It needs no install, so it fits `delegate.sh` as a pass/fail check.
 - Pass rule: 100% on items not marked store-dependent; at least 95% on real lists.
 
@@ -313,7 +313,7 @@ The produce-first order rests on general (US-based) store-layout sources (Chowho
 2. **Store:** which store(s) do you use, and what is the real walking order? Only US-based layout sources were found.
 3. **Aisles:** are 14 right? Should Carnes/Salchichonería and Bebidas/Licores stay merged?
 4. **Otros:** should uncategorized items show at the top (easy to spot and fix) or at the bottom?
-5. **Family decisions on store-dependent items:**
+5. **Decisions on store-dependent items:**
    - papel de baño (Limpieza vs Higiene)
    - pan molido (Despensa vs Panadería)
    - carnitas (Carnes vs rosticería)

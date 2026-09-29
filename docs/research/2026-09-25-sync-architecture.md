@@ -16,7 +16,7 @@
 - **The current relay is not a safe foundation.** HiveMQ's free public broker says it "must not be used in Production". Today it sometimes took 7-9 seconds to connect. It is acceptable as a stopgap, not as the long-term base.
 - **Best free long-term relay: a small Cloudflare Worker with one "Durable Object" per list.** Victor makes one free Cloudflare account ("no credit card required", per Cloudflare). Users need nothing. The cost is $0 up to roughly 5,000-10,000 lists in use per day, then $5 a month.
 - **The Google Sheet idea works for two people, but it is not instant.** Apps Script can only be polled; it cannot push updates. It also has a hard cap of 30 simultaneous runs shared by every user. Keep it for later as an optional "export to Sheet" feature.
-- **Firebase is a sound Plan B for family scale.** Its free plan stops at 100 simultaneous connections, and the add-on library is about 114 KB.
+- **Firebase is a sound Plan B for small-group scale.** Its free plan stops at 100 simultaneous connections, and the add-on library is about 114 KB.
 - **The current sync code has a bug.** A phone that was offline can overwrite the shared copy with a list that is missing the other phone's new items. Checkpoint 1 fixes it.
 - **On iPhone, two details decide whether this works.** First, add the app to the Home Screen: Safari may erase a site's saved data after 7 days of Safari use without visiting the site, but Home Screen apps are exempt. Second, the app's manifest must not set a fixed start page, or the Home Screen icon will open without the list's key. Test both on the second phone.
 - **Keep the simple merge rule:** for each item, the latest change wins. Load Yjs (about 25-30 KB) only if two people really edit the same line at the same moment. Loro and Automerge (about 1.1 MB each) are too heavy for this app.
@@ -194,7 +194,7 @@ Legend: OK = good fit, ~ = workable with caveats, X = fails the requirement.
 
 ## 5. Recommendation for checkpoint 1
 
-**Goal:** two people in one household share lists instantly, privately, with no accounts and at zero cost, on the code base that will scale later.
+**Goal:** the first two testers share lists instantly, privately, with no accounts and at zero cost, on the code base that will scale later.
 
 1. **Fix what is broken first (no decision needed).**
    - Make list titles safe (P3).
@@ -334,7 +334,7 @@ send({v: 1, iv: b64url(iv), ct: b64url(ct)});
 3. **The second phone.** iPhone or Android? On iPhone, someone will need to test that "Add to Home Screen" from a shared link opens the right list offline. It is not known whether iOS keeps the `#k=` part.
 4. **"Paper" mode.** Will two people really type in the same line at the same moment? If not, the simple per-line rule is enough and Yjs is never loaded.
 5. **Your Sheet idea.** Is an "export to Google Sheet" feature for your data analysis wanted later? Apps Script speed from Mexico was not measured. A 15-minute prototype could measure it if you want evidence.
-6. **Link-leak policy.** Is "the link is the key; rotate if leaked" acceptable UX for the family stage?
+6. **Link-leak policy.** Is "the link is the key; rotate if leaked" acceptable UX for the early checkpoints?
 7. **Still unknown:**
    - How long EMQX and Mosquitto keep retained messages.
    - Whether major Nostr relays serve kind 30078 without AUTH after the 2026-09 change.

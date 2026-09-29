@@ -9,7 +9,7 @@ Legend: ✅ done · 🔨 in progress · ⏳ waiting on Victor · 🔜 next · �
 
 ## Where we are, in one line
 **Checkpoint 1 is online as a private preview: https://listolista-preview.vdm285.workers.dev
-(relay: listolista-relay.vdm285.workers.dev). Next: the two-phone test (Victor's household), fixes, then
+(relay: listolista-relay.vdm285.workers.dev). Next: the two-phone test (the first two testers), fixes, then
 go live on vdm285.github.io/listolista.**
 
 ---
@@ -20,7 +20,7 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 | # | Checkpoint | Who uses it | Goal | Status |
 |---|---|---|---|---|
 | 0 | Safety patch | everyone on the old app | Close the injection hole, unguessable links, fix the sync race | ✅ live 2026-09-25 |
-| 1 | **Quantum paper for two** | Victor's household | Private shared list that syncs instantly, works offline, installs as an app, optional aisle view | 🔨 built + tested locally; phone test pending |
+| 1 | **Quantum paper for two** | the first two testers (Victor's close circle) | Private shared list that syncs instantly, works offline, installs as an app, optional aisle view | 🔨 built + tested locally; phone test pending |
 | 2 | Friends and family | ~10-20 people | Feedback round; polish; own web address decided; first real-use dictionary improvements | 💤 |
 | 3 | Public, open source | anyone | Licence, contribution rules (how to keep bad actors out), English, maybe a donate button | 💤 |
 | — | Possible merge with compa-precio | — | Discuss later (price comparison + lists share the "zero friction, your data" philosophy) | 💤 |
@@ -133,7 +133,8 @@ answer (silence is not a yes). Only purely technical choices may take their defa
 
 ## Log (newest first)
 - 2026-09-29: working rules from Victor's HQ in `AGENTS.md`; personal details removed from the docs;
-  decision column renamed "Suggested default (needs Victor)" (design calls wait for Victor).
-- 2026-09-25 evening: relay deployed (Victor), review fixes, preview online, ready for the phone test.
+  decision column renamed "Suggested default (needs Victor)" (design calls wait for Victor). Later:
+  two more rules (depth; code and words), junior runs logged via HQ notes, neutral tester wording.
+- 2026-09-25 (later): relay deployed (Victor), review fixes, preview online, ready for the phone test.
 - 2026-09-25: research ×4, mock-ups, safety patch live, building blocks + tests, dictionary as data,
   checkpoint-1 app built and tested locally, README/AGENTS updated. Cloudflare account created.

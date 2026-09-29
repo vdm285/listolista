@@ -13,6 +13,11 @@ Owner: Victor (github.com/vdm285). Stage: learning, portfolio and open source; n
   default may apply after 7 days of silence for technical choices only. Always ask first: force pushes,
   deleting his data, anything posted or sent in his name, logins and passwords.
 - **Pushback:** on logic or design flaws and untested claims (not caution or licence caveats).
+- **Depth:** build quick, ideas deep ("quick" or "deep" from Victor overrides). When our own test
+  contradicts a trusted source, show both sides briefly and test both.
+- **Code and words:** lean code with a short "why" note (not golfed); short, plain text for users;
+  reusable modules. Naming: say if an industry-standard name exists, else propose a few analogy-based
+  names.
 - **Test it ourselves:** when a claim is thin or contested, run a small test: pass mark first, plus a
   control that can fail.
 - **Brief card:** before any unattended agent run, Victor approves a one-screen card (goal, will / won't
@@ -24,8 +29,8 @@ Owner: Victor (github.com/vdm285). Stage: learning, portfolio and open source; n
 - **Look:** plain by default (bare wireframe first); polish is an opt-in layer where the visuals are
   the product.
 - **To-dos:** one dated list per project, in its `ROADMAP.md`.
-- **Here:** test local juniors on natural chores (manual: ~/local-ai/docs/manuals/js-logic.md; log in
-  ~/local-ai/benchmarks/junior-field-log.md).
+- **Here:** test local juniors on natural chores (manual: ~/local-ai/docs/manuals/js-logic.md); log each
+  run in HQ via this project's notes for HQ (or tell Victor); don't edit ~/local-ai directly.
 
 Personal context: in Claude's per-project memory, outside git.
 
@@ -36,7 +41,7 @@ on the first phone; they add what was forgotten. The benchmark is **Windows Note
 instantly, you see what you type, nothing else in the way.
 
 Rollout by checkpoints (each one used and trusted before the next):
-1. Victor's household (two phones).
+1. The first two testers, from Victor's close circle (two phones).
 2. Friends and family (feedback).
 3. Free public open-source app (community contributions; maybe a donate button).
 
