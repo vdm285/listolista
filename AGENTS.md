@@ -20,8 +20,9 @@ Owner: Victor (github.com/vdm285). Stage: learning, portfolio and open source; n
   names.
 - **Test it ourselves:** when a claim is thin or contested, run a small test: pass mark first, plus a
   control that can fail.
-- **Brief card:** before any unattended agent run, Victor approves a one-screen card (goal, will / won't
-  do, what he will see, budget and stop rule).
+- **Brief card:** only when a run carries direction or design choices not yet agreed (e.g. how bold a revamp
+  should be), Victor approves a one-screen card first (goal, will / won't do, what he will see, budget and stop rule).
+  Technical runs within an agreed direction need no card: tell him after.
 - **Checkpoints:** show what works, a live preview and "how to try it on your phone"; numbered steps
   whenever his hands are needed.
 - **Locked prototype skeleton:** a `prototype` branch, locked on GitHub, holds only the data the app
