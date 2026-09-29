@@ -11,14 +11,14 @@
 ## Bottom line (plain language)
 
 - **Installing on iPhone is manual but easy.** Since iOS 26, any site added to the Home Screen opens as its own app, and it needs no special setup. A web page still cannot show an "Install" button on iPhone. We can only show a short hint with the steps. On Android, a real "Instalar" button is possible.
-- **On iPhone, the installed app and Safari do not share data. This is the biggest trap.** A list opened in Safari from a WhatsApp link does not appear inside the installed icon. Each icon also keeps its own separate data. The icon opens the address written in the app's settings file, not the page that was on screen. The room link must be built into the installed app, or the app must make it easy to paste the link once. This needs a 15-minute test on your wife's iPhone.
+- **On iPhone, the installed app and Safari do not share data. This is the biggest trap.** A list opened in Safari from a WhatsApp link does not appear inside the installed icon. Each icon also keeps its own separate data. The icon opens the address written in the app's settings file, not the page that was on screen. The room link must be built into the installed app, or the app must make it easy to paste the link once. This needs a 15-minute test on the second phone (an iPhone).
 - **Lists are not wiped on iPhone if the app is installed.** Safari deletes a site's data after 7 days of Safari use without a visit. Installed Home Screen apps keep their own day counter, so a list that is used regularly is safe.
 - **"Zero clicks" is not possible on the web. The minimum is one tap.** iPhone refuses by design to open the keyboard until the user taps. Android behaves the same for web pages. The best we can do is make one tap anywhere on the list open the keyboard, and keep the keyboard up while items are added.
 - **Voice works today with no code.** The mic key on the keyboard already handles Mexican Spanish: iOS 27 dictation on the phone itself, and Gboard on Android. A voice button inside the app can come later. On Android it would need the internet, and on iPhone it is still unreliable.
 - **Today's biggest speed and offline problem is one external file.** The app downloads a 342 KB messaging library (MQTT, the protocol the shared lists use) from a public CDN before it shows anything. That library is 3.4 times the size of the whole app. It is not pinned to a version: it updated itself to a new release on 2026-09-16. When the phone is offline, a shared list gets stuck on "Conectando..." (found by reading the code). The first fix is to show the list first, connect afterwards, and pin and self-host the library.
 - **"One file you can download and open" only works on a computer.** An iPhone cannot run a downloaded HTML file, and offline support needs a few small extra files on the website. The honest promise is "one main file, plus small helper files for offline use".
 - **The free public message server is only meant for testing [new].** HiveMQ's public broker is described as "not intended for private or production data". Today's room codes are made from the current time, so they can be guessed. Treat the server's copy of a list as convenient, not as a backup, and switch to long random room codes.
-- **GitHub Pages is fine for checkpoint 1.** Two things to know. Every push to `main` goes live to your wife within about 10 minutes. Changing to a custom domain later would "reset" installs and local lists, so decide on the domain before the friends-and-family stage.
+- **GitHub Pages is fine for checkpoint 1.** Two things to know. Every push to `main` goes live to the other phone within about 10 minutes. Changing to a custom domain later would "reset" installs and local lists, so decide on the domain before the friends-and-family stage.
 
 ---
 
@@ -279,7 +279,7 @@ Sources: npm registry and jsDelivr, measured 2026-09-25; [u8-mqtt README, npm](h
 
 | # | Item | Recommended approach | iPhone gotchas | Android notes | Quick test on the real phones |
 |---|---|---|---|---|---|
-| 1 | Private shared link | Use long random room codes (`crypto.getRandomValues`), not timestamps. Install from the room link. Share with `navigator.share` → clipboard → `wa.me/?text=` | Isolated storage; the icon opens `start_url` | Shared with Chrome, so less fragile | Wife opens the WhatsApp link, installs, relaunches from the icon: is the same list there? Also check whether WhatsApp opened the link in Safari or in an in-app view |
+| 1 | Private shared link | Use long random room codes (`crypto.getRandomValues`), not timestamps. Install from the room link. Share with `navigator.share` → clipboard → `wa.me/?text=` | Isolated storage; the icon opens `start_url` | Shared with Chrome, so less fragile | The second user opens the WhatsApp link, installs, relaunches from the icon: is the same list there? Also check whether WhatsApp opened the link in Safari or in an in-app view |
 | 2 | Instant sync + strike-through | Show the local copy first, connect afterwards. On return to foreground, **always** open a fresh connection, then subscribe → retained copy → merge → publish | Zombie sockets after lock; timers suspended | Same code | Lock 5 min, unlock, tap an item: does it appear on the other phone within 2 s? |
 | 3 | Home-screen icon | `manifest.webmanifest` (name, short_name, `display: standalone`, `lang: es-MX`, icons 192/512 plus a separate maskable 512) and `apple-touch-icon` 180 px | apple-touch-icon takes precedence; use the `default` status-bar style | Chrome needs 192+512, `start_url` and `display` | Icon and name look right on both home screens |
 | 4 | Offline | `sw.js` at `/listolista/sw.js`, cache-first app shell, versioned cache, background update; register only on `https:`; pass through `pr-preview/` and cross-origin requests | The installed app has its own service worker and cache | – | Airplane mode, launch from the icon: list opens and edits stay, then sync after reconnecting |
@@ -330,7 +330,7 @@ addEventListener('online',wake);
    - Register the service worker only on `https:`.
    - Update the README, which currently claims "zero external dependencies" and "No cloud servers".
 4. **Service worker.** Cache-first app shell with a versioned cache and background update. Show "Nueva versión lista" in the menu and apply it on the next open. Pass through `/listolista/pr-preview/` and all cross-origin requests.
-5. **iPhone isolation and start URL. Test before your wife installs (about 15 minutes, two phones).**
+5. **iPhone isolation and start URL. Test before the second user installs (about 15 minutes, two phones).**
    - Option A: a manifest with no `start_url` or `id`, so the spec default keeps `?room=…`. Check that iOS keeps the room, and check whether Chrome still offers install (it lists `start_url` as required).
    - Option B: a per-room manifest generated in JavaScript, with an absolute `start_url`. Unverified in 2026 sources.
    - Always build the fallback: if the installed app starts with no room, open the last room it saw, and if there is none, show one big "Pegar enlace de la lista" field.
@@ -384,7 +384,7 @@ addEventListener('online',wake);
 ## Open questions / for Victor
 
 **Decisions for you**
-1. **Test session.** Can we borrow your wife's iPhone (which iOS version?) and one Android phone for about 20 minutes? That settles the room link in the installed app, the one-tap keyboard, dictation, and lock/unlock sync.
+1. **Test session.** Can we borrow an iPhone (which iOS version?) and one Android phone for about 20 minutes? That settles the room link in the installed app, the one-tap keyboard, dictation, and lock/unlock sync.
 2. **"Download and open" promise.** It works only for local lists on a computer; iPhone cannot run a downloaded HTML file. Keep it as a desktop-only feature, or drop it from the README?
 3. **Public message server.** HiveMQ's free broker is meant for testing only, and room codes are guessable. Is that acceptable until the friends-and-family stage, or should the sync workstream pick a hosted broker earlier?
 4. **Custom domain.** Stay on `vdm285.github.io` permanently, or pick a domain before friends and family? Changing later resets installs and local lists.

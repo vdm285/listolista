@@ -4,32 +4,39 @@ Vendor-neutral briefing for any AI agent working on this repo (Claude, ChatGPT/C
 Grok, or a local model). `CLAUDE.md` just imports it. Whoever changes direction or architecture
 updates this file.
 
-## Owner
-Victor (github.com/vdm285): product owner and architect. Mathematician/MBA with basic coding;
-explain in plain language. He checks in at milestones: show progress, a live preview and "how
-to test it on your phone" steps, then ask go/no-go. Nothing is merged to `main` (which is the
-live site) or pushed to GitHub without his OK. Project stage: personal learning, portfolio and
-open source; not commercial.
-
-## Working with Victor (copied from the workstation project, 2026-09-25)
-- Interview and align before heavy building; build in checkpoints; at each milestone show a
-  3-line status, a live preview and "how to test on your phone", then ask go/no-go.
-- Explain in plain language; when his hands are needed (logins, terminal, phones) give numbered steps.
-- When the ideal is impossible (e.g. iPhone's one-tap keyboard), do the next best thing and flag it.
-- If something carries a real risk, explain it in 2-3 sentences and let him decide; no
-  self-restricting rules or licence caveats (learning/portfolio stage).
-- Test local AI juniors on natural chores (manual: ~/local-ai/docs/manuals/js-logic.md; log in
+## Owner and working rules (from Victor's HQ, 2026-09-29)
+Owner: Victor (github.com/vdm285). Stage: learning, portfolio and open source; not commercial.
+- **Replies:** checklist first (what's done, what needs Victor), then short details, in plain language.
+- **Language:** English with AIs; products for Victor's close circle start in Spanish.
+- **Who decides:** technical calls (tools, code, tests, free installs, pushes, `main` included) are the
+  agent's; tell Victor after. Design, direction and business: discuss first, Victor decides. A suggested
+  default may apply after 7 days of silence for technical choices only. Always ask first: force pushes,
+  deleting his data, anything posted or sent in his name, logins and passwords.
+- **Pushback:** on logic or design flaws and untested claims (not caution or licence caveats).
+- **Test it ourselves:** when a claim is thin or contested, run a small test: pass mark first, plus a
+  control that can fail.
+- **Brief card:** before any unattended agent run, Victor approves a one-screen card (goal, will / won't
+  do, what he will see, budget and stop rule).
+- **Checkpoints:** show what works, a live preview and "how to try it on your phone"; numbered steps
+  whenever his hands are needed.
+- **Locked prototype skeleton:** a `prototype` branch, locked on GitHub, holds only the data the app
+  keeps and the rules it enforces.
+- **Look:** plain by default (bare wireframe first); polish is an opt-in layer where the visuals are
+  the product.
+- **To-dos:** one dated list per project, in its `ROADMAP.md`.
+- **Here:** test local juniors on natural chores (manual: ~/local-ai/docs/manuals/js-logic.md; log in
   ~/local-ai/benchmarks/junior-field-log.md).
-- Nothing is pushed to GitHub or merged to `main` (the live site) without his OK.
+
+Personal context: in Claude's per-project memory, outside git.
 
 ## Mission
-A **"quantum-linked piece of paper"** for shopping lists. Victor writes "huevos, leche" at home;
-it appears on his wife's phone at the supermarket; she taps an item and it is struck through on
-his phone; she adds what he forgot. The benchmark is **Windows Notepad**: it opens instantly, you
-see what you type, nothing else in the way.
+A **"quantum-linked piece of paper"** for shopping lists. One person writes "huevos, leche" at
+home; it appears on the other's phone at the supermarket; they tap an item and it is struck through
+on the first phone; they add what was forgotten. The benchmark is **Windows Notepad**: it opens
+instantly, you see what you type, nothing else in the way.
 
 Rollout by checkpoints (each one used and trusted before the next):
-1. Victor + his wife.
+1. Victor's household (two phones).
 2. Friends and family (feedback).
 3. Free public open-source app (community contributions; maybe a donate button).
 
@@ -55,8 +62,8 @@ Rollout by checkpoints (each one used and trusted before the next):
   icons); v1 lists migrate automatically. Tests: `sh tests/run.sh` (jsc) and `relay/test/run.sh`
   (Node + local wrangler). Deploy: `tools/deploy.sh relay|preview` after `wrangler login`.
 - Waiting on Victor: Cloudflare account + `wrangler login`; Papel vs Renglones (build = Renglones);
-  51 dictionary conflicts (`data/aisles-review.md`); his store's aisle order; two-phone test (wife
-  iPhone, Victor Android) on the preview before going live.
+  51 dictionary conflicts (`data/aisles-review.md`); the store's aisle order; two-phone test (an
+  iPhone and an Android) on the preview before going live.
 - Known flags: iPhone needs one tap for the keyboard; "huevos y leche" without a comma stays one item;
   Android install without start_url to be checked on his phone.
 

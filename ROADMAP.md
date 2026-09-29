@@ -1,6 +1,6 @@
 # ListoLista roadmap (single source of truth)
 
-Updated: 2026-09-25 (evening). Owner: Victor. Any AI working on this repo reads `AGENTS.md`, then this
+Updated: 2026-09-29. Owner: Victor. Any AI working on this repo reads `AGENTS.md`, then this
 file, and updates both when something changes. Newest state at the top of each section.
 
 Legend: ✅ done · 🔨 in progress · ⏳ waiting on Victor · 🔜 next · 💤 later · 🚩 flag (known limit)
@@ -9,7 +9,7 @@ Legend: ✅ done · 🔨 in progress · ⏳ waiting on Victor · 🔜 next · �
 
 ## Where we are, in one line
 **Checkpoint 1 is online as a private preview: https://listolista-preview.vdm285.workers.dev
-(relay: listolista-relay.vdm285.workers.dev). Next: the two-phone test (Victor + wife), fixes, then
+(relay: listolista-relay.vdm285.workers.dev). Next: the two-phone test (Victor's household), fixes, then
 go live on vdm285.github.io/listolista.**
 
 ---
@@ -20,7 +20,7 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 | # | Checkpoint | Who uses it | Goal | Status |
 |---|---|---|---|---|
 | 0 | Safety patch | everyone on the old app | Close the injection hole, unguessable links, fix the sync race | ✅ live 2026-09-25 |
-| 1 | **Quantum paper for two** | Victor + wife | Private shared list that syncs instantly, works offline, installs as an app, optional aisle view | 🔨 built + tested locally; phone test pending |
+| 1 | **Quantum paper for two** | Victor's household | Private shared list that syncs instantly, works offline, installs as an app, optional aisle view | 🔨 built + tested locally; phone test pending |
 | 2 | Friends and family | ~10-20 people | Feedback round; polish; own web address decided; first real-use dictionary improvements | 💤 |
 | 3 | Public, open source | anyone | Licence, contribution rules (how to keep bad actors out), English, maybe a donate button | 💤 |
 | — | Possible merge with compa-precio | — | Discuss later (price comparison + lists share the "zero friction, your data" philosophy) | 💤 |
@@ -51,7 +51,7 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 2. ✅ Relay and private preview online (`tools/deploy.sh relay|preview`); live sync tests 21/21.
 3. ✅ Independent code review (4 dimensions, 50 agents): 44 confirmed findings; the important ones
    fixed (see commit b058d88); the rest listed in the backlog.
-4. ⏳ **Two-phone test, ~20 minutes** (Victor's Android + wife's iPhone), on the preview:
+4. ⏳ **Two-phone test, ~20 minutes** (an Android and an iPhone), on the preview:
    open the link, add/strike/undo, aisle view, Add to Home Screen from the link, airplane mode then
    back, lock and unlock the phone. Checklist in section "Phone test" below.
 5. 🔜 Fix what the phone test finds.
@@ -76,7 +76,10 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
    plaintext copies on the public MQTT server (`tools/erase-broker-lists.sh --erase`, Victor runs it).
 
 ## Decisions waiting on Victor (priority order)
-| # | Decision | Why it matters | Default if no answer |
+These are design and direction calls: the suggested default is a proposal and waits for Victor's
+answer (silence is not a yes). Only purely technical choices may take their default after 7 days.
+
+| # | Decision | Why it matters | Suggested default (needs Victor) |
 |---|---|---|---|
 | 2 | **Papel or Renglones** (try the mock-ups) | The main writing experience | Renglones (today's layout) |
 | 3 | Your store(s) and their aisle walking order | Aisle view order | Produce first, then bread, meat, dairy, frozen… |
@@ -95,13 +98,13 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
   shared list (a "new link" button is planned).
 
 ## Phone test checklist (checkpoint 1)
-- [ ] Victor opens the preview, writes 3 items, taps Compartir, sends the link to his wife (WhatsApp).
-- [ ] Wife opens the link on iPhone: the list appears; she strikes one item → struck on Victor's phone.
-- [ ] Wife adds an item → appears on Victor's phone within ~1-2 s.
+- [ ] Phone A (Android) opens the preview, writes 3 items, taps Compartir, sends the link to phone B (WhatsApp).
+- [ ] Phone B opens the link on iPhone: the list appears; strike one item → struck on phone A.
+- [ ] Phone B adds an item → appears on phone A within ~1-2 s.
 - [ ] Hold an item → edit and delete work; Deshacer brings it back.
 - [ ] Menu → Ordenar por pasillo; change one item's aisle → the other phone shows it.
-- [ ] Wife: Share → Agregar a inicio **from the list link**; open the icon → the same list opens.
-- [ ] Victor (Android): menu → Instalar como app (or Chrome menu → Add to Home screen).
+- [ ] Phone B (iPhone): Share → Agregar a inicio **from the list link**; open the icon → the same list opens.
+- [ ] Phone A (Android): menu → Instalar como app (or Chrome menu → Add to Home screen).
 - [ ] Airplane mode on one phone, edit on both, airplane mode off → both lists match.
 - [ ] Lock the phone 5 minutes, unlock → still in sync.
 - [ ] Anything confusing, slow or annoying → note it here.
@@ -121,7 +124,7 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
   entries from Mis listas; move the app off the shared vdm285.github.io origin (secrets in
   localStorage are shared with Victor's other pages there) → strongly consider the own address.
 - 💤 "Papel" mode (if chosen) or as an optional view.
-- 💤 Grow the aisle dictionary with the local model (label hundreds of candidate words; family reviews
+- 💤 Grow the aisle dictionary with the local model (label hundreds of candidate words; a person reviews
   disagreements) → raise the test floor.
 - 💤 "Nueva liga/enlace" (rotate a leaked link); export/import; "export to Google Sheet".
 - 💤 Multiple stores (per-store aisle order).
@@ -129,6 +132,8 @@ Each checkpoint starts only when Victor is comfortable with the previous one.
 - 💤 Friends-and-family feedback form (no accounts).
 
 ## Log (newest first)
+- 2026-09-29: working rules from Victor's HQ in `AGENTS.md`; personal details removed from the docs;
+  decision column renamed "Suggested default (needs Victor)" (design calls wait for Victor).
 - 2026-09-25 evening: relay deployed (Victor), review fixes, preview online, ready for the phone test.
 - 2026-09-25: research ×4, mock-ups, safety patch live, building blocks + tests, dictionary as data,
   checkpoint-1 app built and tested locally, README/AGENTS updated. Cloudflare account created.

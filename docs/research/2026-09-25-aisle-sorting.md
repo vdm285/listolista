@@ -217,7 +217,7 @@ The produce-first order rests on general (US-based) store-layout sources (Chowho
 1. Resolve the 50 conflicting duplicates.
 2. Gather candidate words: PROFECO product and brand names (CC BY 4.0, with attribution), plus Qwen brainstorms per aisle (colloquial names, brands, diminutives).
 3. Label them with local Qwen3.6-35B: thinking off, temperature 0, output forced to the aisle IDs (llama-server's `response_format` json_schema works; verified locally), 40-100 items per batch.
-4. Cross-check with a second, shuffled pass. Send disagreements and Spain-isms (*patata*, *zumo*, *nata*) to a review file for Victor and his wife.
+4. Cross-check with a second, shuffled pass. Send disagreements and Spain-isms (*patata*, *zumo*, *nata*) to a review file for the household to check.
 
 ### G. Tests
 - Save the 40 tricky items as `tests/aisles-es-MX.tsv` (item, expected ID, store-dependent flag). Add a second set from real family lists.
@@ -309,7 +309,7 @@ The produce-first order rests on general (US-based) store-layout sources (Chowho
 
 ## Open questions / for Victor
 
-1. **Phone and browser:** which does your wife use (Samsung Internet, Chrome or Safari)? This affects the reordering control, and whether iOS 18 Reminders is a relevant comparison.
+1. **Phone and browser:** which does the second phone use (Samsung Internet, Chrome or Safari)? This affects the reordering control, and whether iOS 18 Reminders is a relevant comparison.
 2. **Store:** which store(s) do you use, and what is the real walking order? Only US-based layout sources were found.
 3. **Aisles:** are 14 right? Should Carnes/Salchichonería and Bebidas/Licores stay merged?
 4. **Otros:** should uncategorized items show at the top (easy to spot and fix) or at the bottom?

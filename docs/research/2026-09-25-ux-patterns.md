@@ -13,7 +13,7 @@
 - **Show the list first; hide the rare stuff in one labelled menu.** NN/g and Apple both say it: a few key options up front, at most two levels, gestures only as shortcuts. Today the app has 6 unlabelled emoji buttons in the header. The "delete everything" button sits right next to the others.
 - **The biggest bug for the supermarket:** a shared list covers the screen with "Conectando..." until the internet connects. With no signal, the list never appears. If the MQTT script itself can't load, the list is never even drawn. Fix this first.
 - **Replace pop-up confirmations with Undo.** The code already keeps deleted items as hidden "tombstones", so Undo is cheap to build.
-- **Zero-click is only partly possible on iPhone.** iOS won't open the keyboard by itself. The list can appear instantly, but typing needs one tap. So the whole empty area should be a "tap here to write" zone. Android behaviour still needs a test on your wife's phone.
+- **Zero-click is only partly possible on iPhone.** iOS won't open the keyboard by itself. The list can appear instantly, but typing needs one tap. So the whole empty area should be a "tap here to write" zone. Android behaviour still needs a test on the second phone.
 - **The home-screen icon matters.** Since iOS 26, any site added to the Home Screen opens as an app. Home-screen apps are also exempt from Safari's 7-day data wipe. One catch: the home-screen app does **not** share saved data with Safari, so the shared-list link must be what gets added.
 - **Android is two-thirds of Mexico** (Aug 2026). On Android Chrome the current "no zoom" setting really blocks zooming; iPhone ignores it. Swiping in from the right edge on Android means "Back", so row swipes need care.
 - **Competitors' users complain about** ads over the list, sync failures between spouses, account/verification nags and feature clutter. They praise simplicity and easy sharing with a partner.
@@ -166,7 +166,7 @@ Other dated voices (Hacker News): a year of arguments over grocery items that ne
 
 ### 6.7 Autocorrect ✅
 - The `autocorrect` attribute became Baseline "newly available" on 2026-09-11 (Chrome 153; Safari has had it since iOS 14.5) ([web-features data](https://github.com/web-platform-dx/web-features); [MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect)).
-- Use it only if your wife's real typing shows the problem.
+- Use it only if the second user's real typing shows the problem.
 
 ### 6.8 Haptics ✏️
 - **Android:** `navigator.vibrate` works on Chrome for Android.
@@ -186,7 +186,7 @@ Other dated voices (Hacker News): a year of arguments over grocery items that ne
 - **Tags:** WhatsApp previews use `og:title`, `og:description`, `og:url` and `og:image`.
 - **Image rules:** under 600 KB, at least 300 px wide, aspect ratio 4:1 or less.
 - **Placement:** tags must be in `<head>` within the first 300 KB of HTML ([Meta for Developers, undated](https://developers.facebook.com/documentation/business-messaging/whatsapp/link-previews)).
-- **Why it matters:** a shared link that shows "ListoLista · Lista del súper" and an icon looks trustworthy to your wife.
+- **Why it matters:** a shared link that shows "ListoLista · Lista del súper" and an icon looks trustworthy to the person receiving it.
 
 ### 6.12 Spanish microcopy ✅
 - **Tone:** Microsoft's es-MX guide says "clear, friendly and concise", conversational, and uses "tú".
@@ -195,7 +195,7 @@ Other dated voices (Hacker News): a year of arguments over grocery items that ne
 
 ### 6.13 Testing method ✅
 - **Prototypes:** with static screens, users gave "less specific feedback"; interactive prototypes surfaced specific problems ([Megan Chan, NN/g, 2026-09-11](https://www.nngroup.com/articles/test-earlier-with-ai/)).
-- **Dogfooding:** "you cannot reliably simulate not knowing" ([Therese Fessenden, NN/g, 2026-08-07](https://www.nngroup.com/articles/dogfooding/)). The Victor + wife test is dogfooding. It is useful, but it is not user research.
+- **Dogfooding:** "you cannot reliably simulate not knowing" ([Therese Fessenden, NN/g, 2026-08-07](https://www.nngroup.com/articles/dogfooding/)). The household test is dogfooding. It is useful, but it is not user research.
 
 ---
 
@@ -289,13 +289,13 @@ No draft claim was refuted outright.
 
 ## Open questions / for Victor
 
-1. **Your wife's phone.** What phone and OS does she use? If Android (66% of Mexico), test: does the keyboard open on load, and does a right-edge swipe trigger Back?
+1. **The second phone.** What phone and OS does it run? If Android (66% of Mexico), test: does the keyboard open on load, and does a right-edge swipe trigger Back?
 2. **Paper or rows?** Decide after the clickable mock-up test, not before.
 3. **Struck items.** Stay in place (paper) or sink to "Tachados" (rows, like OurGroceries)?
 4. **Long-press.** A small Editar/Borrar menu (proposed) or direct edit? Is drag-to-reorder needed in checkpoint 1? It competes with long-press.
 5. **Splitting on " y ".** Should "huevos y leche" become two items? Only commas is the safe default.
 6. **Aisle corrections.** Remember "move to another aisle" per list now, or in checkpoint 2?
-7. **Notifications.** "Your wife added an item" needs web push, which needs a server. Skip for now, given zero server cost?
+7. **Notifications.** "Someone added an item" needs web push, which needs a server. Skip for now, given zero server cost?
 8. **No Watch or widgets.** A web app can't offer Apple Watch or lock-screen widgets (a common complaint when competitors removed them). Acceptable?
 9. **Home-screen URL.** Verify on-device that the shared-list URL (with `?room=`) is what the home-screen icon opens, with and without a manifest `start_url`.
 10. **Spanish button label.** Check on-device the exact Spanish (Mexico) wording of "Add to Home Screen" before writing the install-hint steps.
